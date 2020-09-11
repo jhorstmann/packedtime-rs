@@ -158,7 +158,6 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
     let millisecond = millisecond as i32;
 
     unsafe {
-
         let input = std::arch::x86_64::_mm256_setr_epi32(millisecond / 10, second, minute, hour, day, month, year % 100, year / 100);
 
         // divide by 10 by reciprocal multiplication
@@ -169,22 +168,20 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
 
         let fmt = std::arch::x86_64::_mm256_or_si256(std::arch::x86_64::_mm256_slli_epi32(tens, 16), ones);
         let fmt = std::arch::x86_64::_mm_packus_epi16(std::arch::x86_64::_mm256_extractf128_si256(fmt, 0), std::arch::x86_64::_mm256_extractf128_si256(fmt, 1));
-        let fmt = std::arch::x86_64::_mm_add_epi8(fmt, std::arch::x86_64::_mm_set1_epi8('0' as i8));
+        let fmt = std::arch::x86_64::_mm256_broadcastsi128_si256(fmt);
+        let fmt = std::arch::x86_64::_mm256_shuffle_epi8(fmt, std::arch::x86_64::_mm256_set_epi8(
+            -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, 2, 3, -1,
+            4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15,
+        ));
 
-        let hi = std::arch::x86_64::_mm_insert_epi32(fmt, 0x2D543A30, 0); // -T:0
-        let hi = std::arch::x86_64::_mm_shuffle_epi8(hi, std::arch::x86_64::_mm_set_epi8(4, 5, 1, 6, 7, 2, 8, 9, 3, 10, 11, 3, 12, 13, 14, 15));
+        let fmt = std::arch::x86_64::_mm256_add_epi8(fmt, std::arch::x86_64::_mm256_loadu_si256("0000-00-00T00:00:00.000Z".as_ptr() as *const __m256i));
 
-        let lo = std::arch::x86_64::_mm_insert_epi32(fmt, 0x2E3A5A30 + millisecond % 10, 3);  // :.Z0
-        let lo = std::arch::x86_64::_mm_shuffle_epi8(lo, std::arch::x86_64::_mm_set_epi8(12, 12, 12, 12, 12, 12, 12, 12, 13, 12, 0, 1, 15, 2, 3, 14));
+        let mask = std::arch::x86_64::_mm256_insert_epi64(std::arch::x86_64::_mm256_set1_epi64x(-1), 0, 7);
+        std::arch::x86_64::_mm256_maskstore_epi32(slice.as_mut_ptr() as *mut i32, mask, fmt);
 
-        std::arch::x86_64::_mm_storeu_si128(slice.as_mut_ptr() as *mut __m128i, hi);
-
-        let mask = std::arch::x86_64::_mm_insert_epi64(std::arch::x86_64::_mm_set1_epi64x(-1), 0, 3);
-        //let mask = std::arch::x86_64::_mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -1, -1, -1, -1);
-        std::arch::x86_64::_mm_maskmoveu_si128(lo, mask, slice.as_mut_ptr().offset(16) as *mut i8);
-
-        //unsafe { asm!("#LLVM-MCA-END format_simd_mul") };
+        slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
     }
+    //unsafe { asm!("#LLVM-MCA-END format_simd_mul") };
 }
 
 
@@ -217,11 +214,8 @@ unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: i16, day: i16,
     let rhi = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0xF000_u16 as i16)), 12);
 
     res = std::arch::x86_64::_mm_or_si128(rlo, rhi);
-    //res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_set1_epi8('0' as i8));
-    //res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_set_epi8('-' as i8 - '0' as i8, 'T' as i8 - '0' as i8, ':' as i8 - '0' as i8, '.' as i8 - '0' as i8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
-    res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_loadu_si128("000000000000.:T-".as_ptr() as *const __m128i));
-
-    res = std::arch::x86_64::_mm_shuffle_epi8(res, std::arch::x86_64::_mm_set_epi8(12, 9, 8, 13, 7, 6, 13, 5, 4, 14, 3, 2, 15, 1, 0, 15));
+    res = std::arch::x86_64::_mm_shuffle_epi8(res, std::arch::x86_64::_mm_set_epi8(-1, 9, 8, -1, 7, 6, -1, 5, 4, -1, 3, 2, -1, 1, 0, -1));
+    res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_loadu_si128("-00-00T00:00:00.".as_ptr() as *const __m128i));
 
     std::arch::x86_64::_mm_storeu_si128(buffer as *mut __m128i, res);
 }
@@ -405,7 +399,7 @@ pub mod tests {
 
     fn assert_format(expected: &str, year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32, f: FormatToSlice) {
         let actual = unsafe {
-            let mut buffer: Vec<u8> = Vec::with_capacity(24);
+            let mut buffer: Vec<u8> = Vec::with_capacity(32);
 
             unsafe {buffer.set_len(24) };
 
