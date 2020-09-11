@@ -199,8 +199,8 @@ unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: i16, day: i16,
     let mut res = std::arch::x86_64::_mm_set_epi16(0, 0, 0, second, minute, hour, day, month);
 
     // magic double-dabble
-    res = std::arch::x86_64::_mm_slli_epi16(res, 3);
-    for _i in 3..8 {
+    res = std::arch::x86_64::_mm_slli_epi16(res, 3+8-6);
+    for _i in 3..6 {
         let mask3 = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x8800_u16 as i16)), 3);
         let mask2 = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x4400_u16 as i16)), 2);
         let mask1 = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x2200_u16 as i16)), 1);
@@ -422,16 +422,22 @@ pub mod tests {
     #[test]
     fn test_format_scalar() {
         assert_format("2021-09-10T23:45:31.987Z", 2021, 09, 10, 23, 45, 31, 987, format_scalar_to_slice);
+        assert_format("2021-01-01T00:00:00.000Z", 2021, 1, 1, 0, 0, 0, 0, format_scalar_to_slice);
+        assert_format("2021-12-31T23:59:60.999Z", 2021, 12, 31, 23, 59, 60, 999, format_scalar_to_slice);
     }
 
     #[test]
     fn test_format_simd_dd() {
         assert_format("2021-09-10T23:45:31.987Z", 2021, 09, 10, 23, 45, 31, 987, format_simd_dd_to_slice);
+        assert_format("2021-01-01T00:00:00.000Z", 2021, 1, 1, 0, 0, 0, 0, format_simd_dd_to_slice);
+        assert_format("2021-12-31T23:59:60.999Z", 2021, 12, 31, 23, 59, 60, 999, format_simd_dd_to_slice);
     }
 
     #[test]
     fn test_format_simd_mul() {
         assert_format("2021-09-10T23:45:31.987Z", 2021, 09, 10, 23, 45, 31, 987, format_simd_mul_to_slice);
+        assert_format("2021-01-01T00:00:00.000Z", 2021, 1, 1, 0, 0, 0, 0, format_simd_mul_to_slice);
+        assert_format("2021-12-31T23:59:60.999Z", 2021, 12, 31, 23, 59, 60, 999, format_simd_mul_to_slice);
     }
 
 
