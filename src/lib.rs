@@ -164,7 +164,14 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
         let tens = std::arch::x86_64::_mm256_mullo_epi32(input, std::arch::x86_64::_mm256_set1_epi32(52429));
         let tens = std::arch::x86_64::_mm256_srli_epi32(tens, 19);
 
-        let ones = std::arch::x86_64::_mm256_sub_epi32(input, std::arch::x86_64::_mm256_mullo_epi32(tens, std::arch::x86_64::_mm256_set1_epi32(10)));
+        //let tens_times10 = std::arch::x86_64::_mm256_mullo_epi32(tens, std::arch::x86_64::_mm256_set1_epi32(10));
+
+        let tens_times2 =  std::arch::x86_64::_mm256_add_epi32(tens, tens);
+        let tens_times3 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens);
+        let tens_times5 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens_times3);
+        let tens_times10 =  std::arch::x86_64::_mm256_add_epi32(tens_times5, tens_times5);
+
+        let ones = std::arch::x86_64::_mm256_sub_epi32(input, tens_times10);
 
         let fmt = std::arch::x86_64::_mm256_or_si256(std::arch::x86_64::_mm256_slli_epi32(tens, 16), ones);
         let fmt = std::arch::x86_64::_mm_packus_epi16(std::arch::x86_64::_mm256_extractf128_si256(fmt, 0), std::arch::x86_64::_mm256_extractf128_si256(fmt, 1));
