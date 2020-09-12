@@ -11,6 +11,8 @@ codegen-units = 1
 
 [dependencies]
 static_assertions = "1.1.0"
+chrono = "0.4.15"
+
 
 [dev-dependencies]
 criterion = "0.3"

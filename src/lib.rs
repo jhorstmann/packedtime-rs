@@ -1,4 +1,7 @@
 //#![feature(asm)]
+#![allow(unused_parens)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 #[derive(Debug, PartialEq)]
 enum ParseError {
@@ -49,6 +52,31 @@ static_assertions::const_assert!(
 #[derive(PartialEq, Clone, Copy)]
 pub struct Packedtime(u64);
 
+#[repr(C)]
+#[derive(PartialEq, Clone, Copy, Debug, Default)]
+struct Timestamp {
+    year_hi: i16,
+    year_lo: i16,
+    month: u16,
+    day: u16,
+    hour: u16,
+    minute: u16,
+    second: u16,
+    millisecond: u16,
+}
+
+impl Timestamp {
+    fn new(year: i16, month: u16, day: u16, hour: u16, minute: u16) -> Self {
+        Self {
+            year_hi: year / 100,
+            year_lo: year % 100,
+            month, day, hour, minute,
+            second: 0,
+            millisecond: 0,
+        }
+    }
+}
+
 impl Packedtime {
     pub fn new_utc(
         year: i32,
@@ -59,7 +87,19 @@ impl Packedtime {
         second: u32,
         milli: u32,
     ) -> Self {
-        let value = (((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS | day as u64)
+        Self::new(year, month, day, hour, minute, second, milli, 0)
+    }
+    pub fn new(
+        year: i32,
+        month: u32,
+        day: u32,
+        hour: u32,
+        minute: u32,
+        second: u32,
+        milli: u32,
+        offset: u32,
+    ) -> Self {
+        let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS | day as u64)
             << HOUR_BITS
             | hour as u64)
             << MINUTE_BITS
@@ -68,7 +108,8 @@ impl Packedtime {
             | second as u64)
             << MILLI_BITS
             | milli as u64)
-            << OFFSET_BITS;
+            << OFFSET_BITS)
+            | offset as u64;
         Self(value)
     }
 
@@ -298,7 +339,7 @@ fn parse_seconds_and_millis(bytes: &[u8]) -> ParseResult<(u32, u32)> {
     unimplemented!()
 }
 
-fn parse(input: &str) -> ParseResult<Packedtime> {
+fn parse(input: &str) -> ParseResult<Timestamp> {
     //2020-09-09T15:05:45Z"
     //2020-09-09T15:05:45.123456789Z
 
@@ -310,10 +351,8 @@ fn parse(input: &str) -> ParseResult<Packedtime> {
     const MIN_BYTES: &[u8] = "))))-)0-)0S))9))9))".as_bytes();
     const MAX_BYTES: &[u8] = "@@@@-2@-4@U3@;6@;6@".as_bytes();
     const SPACE_SEP_BYTES: &[u8] = "0000-00-00 00:00:00".as_bytes();
-    //const NUM_MASK : &[u8] = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF, 0x00, 0xFF, 0xFF].as_ref();
-    // 0123-01-23T45:670123-01-23T45:67
-    // 0123-01-23T45:670123-01-23T45:67
-    //const SHUFFLE : &[u8] = [   ,255,255,3,2,1, 0, 255, 255].as_ref();
+
+    let mut timestamp = Timestamp::default();
 
     unsafe {
         let ts_without_seconds = std::arch::x86_64::_mm_loadu_si128(bytes.as_ptr() as *const __m128i);
@@ -329,40 +368,44 @@ fn parse(input: &str) -> ParseResult<Packedtime> {
         let mask = std::arch::x86_64::_mm_movemask_epi8(mask);
 
 
-        eprintln!("{:x}", mask);
         if mask != 0xFFFF {
             return Err(ParseError::InvalidChar((!mask).trailing_zeros() as usize));
         }
-        /*
-                let nums = std::arch::x86_64::_mm_and_si128(ts_without_seconds, std::arch::x86_64::_mm_loadu_si128(NUM_MASK.as_ptr() as *const __m128i));
-                let numsperm = std::arch::x86_64::_mm256_shuffle_epi8(ts_without_seconds, std::arch::x86_64::_mm_loadu_si128(NUM_MASK.as_ptr() as *const __m128i));
 
-                let nums = std::arch::x86_64::_mm256_broadcastsi128_si256(nums);
-                let nums = std::arch::x86_64::_mm256_sra_epi16(nums;
+        let nums = std::arch::x86_64::_mm_sub_epi8(ts_without_seconds, space);
+        let nums = std::arch::x86_64::_mm_shuffle_epi8(nums, std::arch::x86_64::_mm_set_epi8(
+            -1,-1,-1,-1, 15, 14,12,11,9,8,6,5,3,2,1,0
+        ));
 
-        */
+        let hundreds = std::arch::x86_64::_mm_and_si128(nums,  std::arch::x86_64::_mm_set1_epi16(0x00FF));
+        let hundreds = std::arch::x86_64::_mm_mullo_epi16(hundreds, std::arch::x86_64::_mm_set1_epi16(10));
+
+        let ones = std::arch::x86_64::_mm_srli_epi16(nums,  8);
+
+        let res = std::arch::x86_64::_mm_add_epi16(ones, hundreds);
+
+        let timestamp_ptr: *mut Timestamp = &mut timestamp;
+        std::arch::x86_64::_mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
     }
 
 
-    Ok(Packedtime(0))
+    Ok(timestamp)
 }
-
-
 
 
 #[cfg(test)]
 pub mod tests {
-    use crate::{Packedtime, parse, ParseError, format_simd_mul_to_slice, format_simd_dd_to_slice, format_scalar_to_slice};
+    use crate::{Packedtime, parse, ParseError, format_simd_mul_to_slice, format_simd_dd_to_slice, format_scalar_to_slice, Timestamp};
 
     #[test]
     fn test_valid() {
-        assert_eq!(Ok(Packedtime(0)), parse("1970-01-01T00:00Z"));
-        assert_eq!(Ok(Packedtime(0)), parse("1970-01-01T00:00:00Z"));
-        assert_eq!(Ok(Packedtime(0)), parse("1970-01-01T00:00:00.000Z"));
+        assert!(parse("1970-01-01T00:00Z").is_ok());
+        assert!(parse("1970-01-01T00:00:00Z").is_ok());
+        assert!(parse("1970-01-01T00:00:00.000Z").is_ok());
 
-        assert_eq!(Ok(Packedtime(0)), parse("1970-01-01 00:00Z"));
-        assert_eq!(Ok(Packedtime(0)), parse("1970-01-01 00:00:00Z"));
-        assert_eq!(Ok(Packedtime(0)), parse("1970-01-01 00:00:00.000Z"));
+        assert!(parse("1970-01-01 00:00Z").is_ok());
+        assert!(parse("1970-01-01 00:00:00Z").is_ok());
+        assert!(parse("1970-01-01 00:00:00.000Z").is_ok());
     }
 
     #[test]
@@ -374,14 +417,17 @@ pub mod tests {
 
     #[test]
     fn test_invalid_char() {
-        //assert_eq!(Err(ParseError::InvalidChar(0)), parse("XXXX/XX/XX&XX/XX/XX_"));
-        //assert_eq!(Err(ParseError::InvalidChar(16)), parse("2020-09-10T12:XX:00Z"));
         assert_eq!(Err(ParseError::InvalidChar(0)), parse("X020-09-10T12:00:00Z"));
         assert_eq!(Err(ParseError::InvalidChar(1)), parse("2X20-09-10T12:00:00Z"));
         assert_eq!(Err(ParseError::InvalidChar(2)), parse("20X0-09-10T12:00:00Z"));
         assert_eq!(Err(ParseError::InvalidChar(10)), parse("2020-09-10X12:00:00Z"));
         assert_eq!(Err(ParseError::InvalidChar(10)), parse("2020-09-10X12:00/"));
         assert_eq!(Err(ParseError::InvalidChar(15)), parse("2020-09-10T12:0X/"));
+    }
+
+    #[test]
+    fn test_parse() {
+        assert_eq!(Timestamp::new(2345, 12, 24, 17, 30), parse("2345-12-24T17:30:15.010Z").unwrap());
     }
 
     #[test]
@@ -405,17 +451,16 @@ pub mod tests {
     type FormatToSlice =  unsafe fn(&mut [u8], u32, u32, u32, u32, u32, u32, u32);
 
     fn assert_format(expected: &str, year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32, f: FormatToSlice) {
-        let actual = unsafe {
-            let mut buffer: Vec<u8> = Vec::with_capacity(32);
+        let mut buffer: Vec<u8> = Vec::with_capacity(32);
 
-            unsafe {buffer.set_len(24) };
+        unsafe { buffer.set_len(24) };
 
-            let slice = &mut buffer.as_mut_slice()[0..24];
+        let slice = &mut buffer.as_mut_slice()[0..24];
 
-            f(slice, year, month, day, hour, minute, second, millisecond);
+        unsafe { f(slice, year, month, day, hour, minute, second, millisecond); }
 
-            String::from_utf8(buffer).unwrap()
-        };
+        let actual = String::from_utf8(buffer).unwrap();
+
         assert_eq!(expected, &actual);
     }
 
