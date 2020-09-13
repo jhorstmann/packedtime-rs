@@ -1,6 +1,11 @@
 use std::arch::x86_64::{__m128i, __m256i};
 use std::arch::x86_64::*;
 
+const PATTERN_COMPLETE: &str = "0000-00-00T00:00:00.000Z00:00:00";
+const PATTERN_AFTER_YEAR: &str = "-00-00T00:00:00.";
+
+static_assertions::const_assert!(PATTERN_COMPLETE.len() == 32);
+static_assertions::const_assert!(PATTERN_AFTER_YEAR.len() == 16);
 
 pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_mul") };
@@ -26,7 +31,7 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
         let tens_times2 =  std::arch::x86_64::_mm256_add_epi32(tens, tens);
         let tens_times3 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens);
         let tens_times5 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens_times3);
-        let tens_times10 =  std::arch::x86_64::_mm256_add_epi32(tens_times5, tens_times5);
+        let tens_times10 =  std::arch::x86_64::_mm256_slli_epi32(tens_times5, 1);
 
         let ones = std::arch::x86_64::_mm256_sub_epi32(input, tens_times10);
 
@@ -38,9 +43,9 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
             4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15,
         ));
 
-        let fmt = std::arch::x86_64::_mm256_add_epi8(fmt, std::arch::x86_64::_mm256_loadu_si256("0000-00-00T00:00:00.000Z".as_ptr() as *const __m256i));
+        let fmt = std::arch::x86_64::_mm256_or_si256(fmt, std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i));
 
-        let mask = std::arch::x86_64::_mm256_insert_epi64(std::arch::x86_64::_mm256_set1_epi64x(-1), 0, 7);
+        let mask = std::arch::x86_64::_mm256_set_epi32(0, -1, -1, -1, -1, -1, -1, -1);
         std::arch::x86_64::_mm256_maskstore_epi32(slice.as_mut_ptr() as *mut i32, mask, fmt);
 
         slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
@@ -79,7 +84,7 @@ unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: i16, day: i16,
 
     res = std::arch::x86_64::_mm_or_si128(rlo, rhi);
     res = std::arch::x86_64::_mm_shuffle_epi8(res, std::arch::x86_64::_mm_set_epi8(-1, 9, 8, -1, 7, 6, -1, 5, 4, -1, 3, 2, -1, 1, 0, -1));
-    res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_loadu_si128("-00-00T00:00:00.".as_ptr() as *const __m128i));
+    res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_loadu_si128(PATTERN_AFTER_YEAR.as_ptr() as *const __m128i));
 
     std::arch::x86_64::_mm_storeu_si128(buffer as *mut __m128i, res);
 }
