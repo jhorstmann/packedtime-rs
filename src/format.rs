@@ -1,5 +1,6 @@
 use std::arch::x86_64::{__m128i, __m256i};
 use std::arch::x86_64::*;
+use crate::util::{debug_m128, debug_m256};
 
 const PATTERN_COMPLETE: &str = "0000-00-00T00:00:00.000Z00:00:00";
 const PATTERN_AFTER_YEAR: &str = "-00-00T00:00:00.";
@@ -11,39 +12,39 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_mul") };
 
     let slice = &mut slice[0..24];
-    let year = year as i32;
-    let month = month as i32;
-    let day = day as i32;
-    let hour = hour as i32;
-    let minute = minute as i32;
-    let second = second as i32;
-    let millisecond = millisecond as i32;
+    let year = year as i16;
+    let month = month as i16;
+    let day = day as i16;
+    let hour = hour as i16;
+    let minute = minute as i16;
+    let second = second as i16;
+    let millisecond = millisecond as i16;
 
     unsafe {
-        let input = std::arch::x86_64::_mm256_setr_epi32(millisecond / 10, second, minute, hour, day, month, year % 100, year / 100);
+        let input = std::arch::x86_64::_mm_setr_epi16(millisecond / 10, second, minute, hour, day, month, year % 100, year / 100);
 
         // divide by 10 by reciprocal multiplication
-        let tens = std::arch::x86_64::_mm256_mulhi_epu16(input, std::arch::x86_64::_mm256_set1_epi32(52429));
-        let tens = std::arch::x86_64::_mm256_srli_epi32(tens, 3);
+        let tens = std::arch::x86_64::_mm_mulhi_epu16(input, std::arch::x86_64::_mm_set1_epi16(52429_u16 as i16));
+        let tens = std::arch::x86_64::_mm_srli_epi16(tens, 3);
 
-        let tens_times10 = std::arch::x86_64::_mm256_mullo_epi16(tens, std::arch::x86_64::_mm256_set1_epi32(10));
+        // remainder of division by 10
+        let tens_times10 = std::arch::x86_64::_mm_mullo_epi16(tens, std::arch::x86_64::_mm_set1_epi16(10));
+        let ones = std::arch::x86_64::_mm_sub_epi16(input, tens_times10);
 
-        //let tens_times2 =  std::arch::x86_64::_mm256_add_epi32(tens, tens);
-        //let tens_times3 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens);
-        //let tens_times5 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens_times3);
-        //let tens_times10 =  std::arch::x86_64::_mm256_slli_epi32(tens_times5, 1);
+        // merge into bytes
+        let bcd = std::arch::x86_64::_mm_or_si128(std::arch::x86_64::_mm_slli_epi16(tens, 8), ones);
 
-        let ones = std::arch::x86_64::_mm256_sub_epi32(input, tens_times10);
-
-        let fmt = std::arch::x86_64::_mm256_or_si256(std::arch::x86_64::_mm256_slli_epi32(tens, 16), ones);
-        let fmt = std::arch::x86_64::_mm_packus_epi16(std::arch::x86_64::_mm256_extractf128_si256(fmt, 0), std::arch::x86_64::_mm256_extractf128_si256(fmt, 1));
-        let fmt = std::arch::x86_64::_mm256_broadcastsi128_si256(fmt);
+        // broadcast to allow room for separators and lanewise shuffle
+        let fmt = std::arch::x86_64::_mm256_broadcastsi128_si256(bcd);
         let fmt = std::arch::x86_64::_mm256_shuffle_epi8(fmt, std::arch::x86_64::_mm256_set_epi8(
             -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, 2, 3, -1,
             4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15,
         ));
+
+        // insert hundreds of milliseconds now that we have room
         let fmt = std::arch::x86_64::_mm256_insert_epi8(fmt, (millisecond % 10) as i8, 22);
 
+        // add '0' and separator ascii values
         let fmt = std::arch::x86_64::_mm256_or_si256(fmt, std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i));
 
         let mask = std::arch::x86_64::_mm256_set_epi32(0, -1, -1, -1, -1, -1, -1, -1);
