@@ -32,23 +32,29 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
         let ones = std::arch::x86_64::_mm_sub_epi16(input, tens_times10);
 
         // merge into bytes
-        let bcd = std::arch::x86_64::_mm_or_si128(std::arch::x86_64::_mm_slli_epi16(tens, 8), ones);
+        let fmt = std::arch::x86_64::_mm_or_si128(std::arch::x86_64::_mm_slli_epi16(tens, 8), ones);
 
         // broadcast to allow room for separators and lanewise shuffle
-        let fmt = std::arch::x86_64::_mm256_broadcastsi128_si256(bcd);
-        let fmt = std::arch::x86_64::_mm256_shuffle_epi8(fmt, std::arch::x86_64::_mm256_set_epi8(
+        let fmt_lo = std::arch::x86_64::_mm_shuffle_epi8(fmt, std::arch::x86_64::_mm_set_epi8(
             -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, 2, 3, -1,
+        ));
+        let fmt_hi = std::arch::x86_64::_mm_shuffle_epi8(fmt, std::arch::x86_64::_mm_set_epi8(
             4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15,
         ));
 
         // insert hundreds of milliseconds now that we have room
-        let fmt = std::arch::x86_64::_mm256_insert_epi8(fmt, (millisecond % 10) as i8, 22);
+        let fmt_lo = std::arch::x86_64::_mm_insert_epi8(fmt_lo, (millisecond % 10) as i32, 6);
 
         // add '0' and separator ascii values
-        let fmt = std::arch::x86_64::_mm256_or_si256(fmt, std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i));
+        //let fmt = std::arch::x86_64::_mm256_or_si256(fmt, std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i));
+        let pattern = std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i);
+        let fmt_lo = std::arch::x86_64::_mm_or_si128(fmt_lo, std::arch::x86_64::_mm256_extractf128_si256(pattern, 1));
+        let fmt_hi = std::arch::x86_64::_mm_or_si128(fmt_hi, std::arch::x86_64::_mm256_extractf128_si256(pattern, 0));
 
-        let mask = std::arch::x86_64::_mm256_set_epi32(0, -1, -1, -1, -1, -1, -1, -1);
-        std::arch::x86_64::_mm256_maskstore_epi32(slice.as_mut_ptr() as *mut i32, mask, fmt);
+        //let mask = std::arch::x86_64::_mm256_set_epi32(0, -1, -1, -1, -1, -1, -1, -1);
+        //std::arch::x86_64::_mm256_maskstore_epi32(slice.as_mut_ptr() as *mut i32, mask, fmt);
+        std::arch::x86_64::_mm_storeu_si128(slice.as_mut_ptr() as *mut __m128i, fmt_hi);
+        std::arch::x86_64::_mm_storel_epi64(slice.as_mut_ptr().offset(16) as *mut __m128i, fmt_lo);
 
         //slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
     }
