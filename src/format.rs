@@ -92,6 +92,8 @@ unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: i16, day: i16,
 pub fn format_simd_dd_to_slice(slice: &mut[u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_dd") };
 
+    let slice = &mut slice[0..24];
+
     slice[0] = ('0' as u8 + ((year / 1000) as u8));
     slice[1] = ('0' as u8 + ((year / 100 % 10) as u8));
     slice[2] = ('0' as u8 + ((year / 10 % 10) as u8));
@@ -112,6 +114,7 @@ pub fn format_simd_dd_to_slice(slice: &mut[u8], year: u32, month: u32, day: u32,
 
 pub fn format_scalar_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_scalar") };
+    let slice = &mut slice[0..24];
 
     slice[0] = ('0' as u8 + ((year / 1000) as u8));
     slice[1] = ('0' as u8 + ((year / 100 % 10) as u8));
