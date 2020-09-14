@@ -23,15 +23,15 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
         let input = std::arch::x86_64::_mm256_setr_epi32(millisecond / 10, second, minute, hour, day, month, year % 100, year / 100);
 
         // divide by 10 by reciprocal multiplication
-        let tens = std::arch::x86_64::_mm256_mullo_epi32(input, std::arch::x86_64::_mm256_set1_epi32(52429));
-        let tens = std::arch::x86_64::_mm256_srli_epi32(tens, 19);
+        let tens = std::arch::x86_64::_mm256_mulhi_epu16(input, std::arch::x86_64::_mm256_set1_epi32(52429));
+        let tens = std::arch::x86_64::_mm256_srli_epi32(tens, 3);
 
-        //let tens_times10 = std::arch::x86_64::_mm256_mullo_epi32(tens, std::arch::x86_64::_mm256_set1_epi32(10));
+        let tens_times10 = std::arch::x86_64::_mm256_mullo_epi16(tens, std::arch::x86_64::_mm256_set1_epi32(10));
 
-        let tens_times2 =  std::arch::x86_64::_mm256_add_epi32(tens, tens);
-        let tens_times3 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens);
-        let tens_times5 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens_times3);
-        let tens_times10 =  std::arch::x86_64::_mm256_slli_epi32(tens_times5, 1);
+        //let tens_times2 =  std::arch::x86_64::_mm256_add_epi32(tens, tens);
+        //let tens_times3 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens);
+        //let tens_times5 =  std::arch::x86_64::_mm256_add_epi32(tens_times2, tens_times3);
+        //let tens_times10 =  std::arch::x86_64::_mm256_slli_epi32(tens_times5, 1);
 
         let ones = std::arch::x86_64::_mm256_sub_epi32(input, tens_times10);
 
@@ -42,13 +42,14 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
             -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, 2, 3, -1,
             4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15,
         ));
+        let fmt = std::arch::x86_64::_mm256_insert_epi8(fmt, (millisecond % 10) as i8, 22);
 
         let fmt = std::arch::x86_64::_mm256_or_si256(fmt, std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i));
 
         let mask = std::arch::x86_64::_mm256_set_epi32(0, -1, -1, -1, -1, -1, -1, -1);
         std::arch::x86_64::_mm256_maskstore_epi32(slice.as_mut_ptr() as *mut i32, mask, fmt);
 
-        slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
+        //slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
     }
     //unsafe { asm!("#LLVM-MCA-END format_simd_mul") };
 }
