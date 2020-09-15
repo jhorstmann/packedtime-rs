@@ -15,6 +15,8 @@ struct SimdTimestamp {
     pad2: u16,
 }
 
+static_assertions::const_assert!(std::mem::size_of::<SimdTimestamp>() == 16);
+
 impl SimdTimestamp {
     fn new(year: u16, month: u16, day: u16, hour: u16, minute: u16) -> Self {
         Self {
@@ -28,7 +30,7 @@ impl SimdTimestamp {
 }
 
 #[derive(PartialEq, Clone, Debug, Default)]
-struct Timestamp {
+pub struct Timestamp {
     year: u16,
     month: u8,
     day: u8,
@@ -39,39 +41,32 @@ struct Timestamp {
     offset_second: u32
 }
 
+impl Timestamp {
+    fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8, millisecond: u32) -> Self {
+        Self {
+            year, month, day, hour, minute, second, millisecond, offset_second: 0,
+        }
+    }
+}
 
-
-fn parse_scalar(bytes: &[u8], timestamp: &mut Timestamp) -> ParseResult<()> {
+pub fn parse_scalar(str: &str) -> ParseResult<Timestamp> {
+    let bytes = str.as_bytes();
+    let mut timestamp = Timestamp::default();
     let mut index = 0;
 
     let year = parse_num4(bytes, &mut index)?;
-    expect(bytes, &mut index, '-' as u8)?;
+    expect(bytes, &mut index, b'-')?;
     let month = parse_num2(bytes, &mut index)?;
-    expect(bytes, &mut index, '-' as u8)?;
+    expect(bytes, &mut index, b'-')?;
     let day = parse_num2(bytes, &mut index)?;
-    expect2(bytes, &mut index, 'T' as u8, ' ' as u8)?;
+    expect2(bytes, &mut index, b'T', b' ')?;
     let hour = parse_num2(bytes, &mut index)?;
-    expect(bytes, &mut index, ':' as u8)?;
+    expect(bytes, &mut index, b':')?;
     let minute = parse_num2(bytes, &mut index)?;
-    expect(bytes, &mut index, ':' as u8)?;
 
-    let mut second = 0;
-    let mut nano = 0;
-    if index < bytes.len() {
-        let ch = bytes[index];
-        if ch == '.' as u8 {
-            index += 1;
-            nano = parse_nano(bytes, &mut index)?;
+    let (second, nano) = parse_seconds_and_nanos(bytes, &mut index)?;
 
-        } else if ch == ':' as u8 {
-            index += 1;
-            second = parse_num2(bytes, &mut index)?;
-            if index < bytes.len() && bytes[index] == '.' as u8 {
-                index += 1;
-                nano = parse_nano(bytes, &mut index)?;
-            }
-        }
-    }
+    expect(bytes, &mut index, b'Z')?;
 
     timestamp.year = year as u16;
     timestamp.month = month as u8;
@@ -80,16 +75,42 @@ fn parse_scalar(bytes: &[u8], timestamp: &mut Timestamp) -> ParseResult<()> {
     timestamp.minute = minute as u8;
     timestamp.second = second as u8;
     timestamp.millisecond = nano / 1000_000;
+    timestamp.offset_second = 0;
 
-    Ok(())
+    Ok(timestamp)
 }
 
+#[inline(always)]
+fn parse_seconds_and_nanos(bytes: &[u8], mut index: &mut usize) -> ParseResult<(u32, u32)> {
+    let mut second = 0;
+    let mut nano = 0;
+    if *index < bytes.len() {
+        let ch = bytes[*index];
+        if ch == b'.' {
+            *index += 1;
+            nano = parse_nano(bytes, &mut index)?;
+
+        } else if ch == b':' {
+            *index += 1;
+            second = parse_num2(bytes, &mut index)?;
+            if *index < bytes.len() && bytes[*index] == b'.' {
+                *index += 1;
+                nano = parse_nano(bytes, &mut index)?;
+            }
+        }
+    }
+
+    Ok((second, nano))
+}
+
+#[inline(always)]
 fn parse_num2(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
     let d1 = digit(bytes, &mut i)?;
     let d2 = digit(bytes, &mut i)?;
     Ok(d1*10 + d2)
 }
 
+#[inline(always)]
 fn parse_num4(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
     let d1 = digit(bytes, &mut i)?;
     let d2 = digit(bytes, &mut i)?;
@@ -98,14 +119,17 @@ fn parse_num4(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
     Ok(d1*1000 + d2 * 100 + d3*10 + d4)
 }
 
+const NANO_MULTIPLIER : [u32; 9] = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000];
+
+#[inline(always)]
 fn parse_nano(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
     let mut r = digit(bytes, &mut i)?;
     let mut j = 1;
 
     while *i < bytes.len() && j < 9 {
         let ch = bytes[*i];
-        if ch >= '0' as u8 && ch <= '9' as u8 {
-            r = r*10 + (ch - ('0' as u8)) as u32;
+        if ch >= b'0' && ch <= b'9' {
+            r = r*10 + (ch - b'0') as u32;
             j += 1;
             *i += 1;
         } else {
@@ -113,9 +137,10 @@ fn parse_nano(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
         }
     }
 
-    Ok(r)
+    Ok(r * NANO_MULTIPLIER[9-j])
 }
 
+#[inline(always)]
 fn expect(bytes: &[u8], i: &mut usize, expected: u8) -> ParseResult<()> {
     let ch = bytes[*i];
     if ch == expected {
@@ -126,6 +151,7 @@ fn expect(bytes: &[u8], i: &mut usize, expected: u8) -> ParseResult<()> {
     }
 }
 
+#[inline(always)]
 fn expect2(bytes: &[u8], i: &mut usize, expected1: u8, expected2: u8) -> ParseResult<u8> {
     let ch = bytes[*i];
     if ch == expected1 || ch == expected2 {
@@ -140,23 +166,16 @@ fn expect2(bytes: &[u8], i: &mut usize, expected1: u8, expected2: u8) -> ParseRe
 #[inline(always)]
 fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
     let ch = bytes[*i];
-    if ch >= '0' as u8 && ch <= '9' as u8 {
+    if ch >= b'0' && ch <= b'9' {
         *i += 1;
-        Ok((ch - ('0' as u8)) as u32)
+        Ok((ch - b'0') as u32)
     } else {
         Err(ParseError::InvalidChar(*i))
     }
 }
 
 
-
-fn parse_seconds_and_millis(bytes: &[u8], index: &mut usize) -> ParseResult<(u32, u32)> {
-    unimplemented!()
-}
-
-
-
-fn parse(input: &str) -> ParseResult<SimdTimestamp> {
+pub fn parse_simd(input: &str) -> ParseResult<Timestamp> {
     //2020-09-09T15:05:45Z"
     //2020-09-09T15:05:45.123456789Z
 
@@ -184,7 +203,6 @@ fn parse(input: &str) -> ParseResult<SimdTimestamp> {
         let mask = std::arch::x86_64::_mm_or_si128(std::arch::x86_64::_mm_and_si128(gt, lt), space_sep);
         let mask = std::arch::x86_64::_mm_movemask_epi8(mask);
 
-
         if mask != 0xFFFF {
             return Err(ParseError::InvalidChar((!mask).trailing_zeros() as usize));
         }
@@ -205,45 +223,64 @@ fn parse(input: &str) -> ParseResult<SimdTimestamp> {
         std::arch::x86_64::_mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
     }
 
+    let mut index = 16;
+    let (second, nano) = parse_seconds_and_nanos(bytes, &mut index)?;
 
-    Ok(timestamp)
+    expect(bytes, &mut index, b'Z');
+
+    let mut result = Timestamp::default();
+    result.year = timestamp.year_hi * 100 + timestamp.year_lo;
+    result.month = timestamp.month as u8;
+    result.day = timestamp.day as u8;
+    result.hour = timestamp.hour as u8;
+    result.minute = timestamp.minute as u8;
+    result.second = second as u8;
+    result.millisecond = nano / 1000_000;
+    result.offset_second = 0;
+
+    Ok(result)
 }
 
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{parse, SimdTimestamp};
+    use crate::parse::{parse_simd, parse_scalar, SimdTimestamp, Timestamp};
     use crate::error::ParseError;
 
     #[test]
     fn test_valid() {
-        assert!(parse("1970-01-01T00:00Z").is_ok());
-        assert!(parse("1970-01-01T00:00:00Z").is_ok());
-        assert!(parse("1970-01-01T00:00:00.000Z").is_ok());
+        assert!(parse_simd("1970-01-01T00:00Z").is_ok());
+        assert!(parse_simd("1970-01-01T00:00:00Z").is_ok());
+        assert!(parse_simd("1970-01-01T00:00:00.000Z").is_ok());
 
-        assert!(parse("1970-01-01 00:00Z").is_ok());
-        assert!(parse("1970-01-01 00:00:00Z").is_ok());
-        assert!(parse("1970-01-01 00:00:00.000Z").is_ok());
+        assert!(parse_simd("1970-01-01 00:00Z").is_ok());
+        assert!(parse_simd("1970-01-01 00:00:00Z").is_ok());
+        assert!(parse_simd("1970-01-01 00:00:00.000Z").is_ok());
     }
 
     #[test]
     fn test_invalid_len() {
-        assert_eq!(Err(ParseError::InvalidLen(0)), parse(""));
-        assert_eq!(Err(ParseError::InvalidLen(1)), parse("X"));
-        assert_eq!(Err(ParseError::InvalidLen(4)), parse("2020"));
+        assert_eq!(Err(ParseError::InvalidLen(0)), parse_simd(""));
+        assert_eq!(Err(ParseError::InvalidLen(1)), parse_simd("X"));
+        assert_eq!(Err(ParseError::InvalidLen(4)), parse_simd("2020"));
     }
 
     #[test]
     fn test_invalid_char() {
-        assert_eq!(Err(ParseError::InvalidChar(0)), parse("X020-09-10T12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(1)), parse("2X20-09-10T12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(2)), parse("20X0-09-10T12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(10)), parse("2020-09-10X12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(10)), parse("2020-09-10X12:00/"));
-        assert_eq!(Err(ParseError::InvalidChar(15)), parse("2020-09-10T12:0X/"));
+        assert_eq!(Err(ParseError::InvalidChar(0)), parse_simd("X020-09-10T12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(1)), parse_simd("2X20-09-10T12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(2)), parse_simd("20X0-09-10T12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(10)), parse_simd("2020-09-10X12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(10)), parse_simd("2020-09-10X12:00/"));
+        assert_eq!(Err(ParseError::InvalidChar(15)), parse_simd("2020-09-10T12:0X/"));
+    }
+
+    #[test]
+    fn test_parse_scalar() {
+        assert_eq!(Timestamp::new(2345, 12, 24, 17, 30, 15, 123), parse_scalar("2345-12-24T17:30:15.123Z").unwrap());
     }
 
     #[test]
     fn test_parse() {
-        assert_eq!(SimdTimestamp::new(2345, 12, 24, 17, 30), parse("2345-12-24T17:30:15.010Z").unwrap());
+        assert_eq!(Timestamp::new(2345, 12, 24, 17, 30, 15, 123), parse_simd("2345-12-24T17:30:15.123Z").unwrap());
     }
 }
