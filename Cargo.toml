@@ -16,6 +16,7 @@ chrono = "0.4.15"
 
 [dev-dependencies]
 criterion = "0.3"
+iso8601 = "0.4.0"
 
 [[bench]]
 name = "bench_format"

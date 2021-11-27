@@ -110,7 +110,7 @@ impl Packedtime {
 
         let slice = &mut buffer.as_mut_slice()[0..24];
 
-        format_simd_dd_to_slice(slice, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        format_scalar_to_slice(slice, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
 
         #[cfg(not(debug_assertions))]
             return unsafe { String::from_utf8_unchecked(buffer) };
