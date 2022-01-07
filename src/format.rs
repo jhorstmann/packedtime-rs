@@ -58,29 +58,37 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
     //unsafe { asm!("#LLVM-MCA-END format_simd_mul") };
 }
 
+#[inline(always)]
 unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
     let mut res = std::arch::x86_64::_mm_loadu_si128(numbers.as_ptr() as *const _);
 
+    // increment bcd digits which are > 4 by 3
+    let lookup_lo = std::arch::x86_64::_mm_setr_epi8(0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3);
+    // let lookup_hi = std::arch::x86_64::_mm_setr_epi8(0, 0, 0, 0, 0, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48);
+    let lookup_hi = std::arch::x86_64::_mm_slli_epi16(lookup_lo, 4);
+
+    let mask_bcd_lo = std::arch::x86_64::_mm_set1_epi16(0x0F00_u16 as i16);
+    let mask_bcd_hi = std::arch::x86_64::_mm_set1_epi16(0xF000_u16 as i16);
+
+    let mask_bcd = std::arch::x86_64::_mm_or_si128(mask_bcd_lo, mask_bcd_hi);
 
     res = std::arch::x86_64::_mm_slli_epi16(res, 3 + 8 - 7);
     for _i in 3..7 {
-        let mask3 = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x8800_u16 as i16)), 3);
-        let mask2 = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x4400_u16 as i16)), 2);
-        let mask1 = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x2200_u16 as i16)), 1);
-        let mask0 = std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x1100));
+        let bcd_lo = res;
+        let bcd_hi = std::arch::x86_64::_mm_srli_epi16(res, 4);
 
-        // increment bcd digits which are > 4 by 3
-        // > 4 means either bit 4 is set or (bit 3 and at least one of bit 2 or bit 1 is set)
-        let mask = std::arch::x86_64::_mm_or_si128(mask3, std::arch::x86_64::_mm_and_si128(mask2, std::arch::x86_64::_mm_or_si128(mask1, mask0)));
-        let inc = std::arch::x86_64::_mm_add_epi16(mask, std::arch::x86_64::_mm_slli_epi16(mask, 1));
+        let inc_lo = std::arch::x86_64::_mm_shuffle_epi8(lookup_lo, bcd_lo);
+        let inc_hi = std::arch::x86_64::_mm_shuffle_epi8(lookup_hi, bcd_hi);
+
+        let inc = std::arch::x86_64::_mm_and_si128(std::arch::x86_64::_mm_or_si128(inc_lo, inc_hi), mask_bcd);
 
         res = std::arch::x86_64::_mm_add_epi16(res, inc);
         res = std::arch::x86_64::_mm_slli_epi16(res, 1);
     }
 
     // 2 bcd coded digits in hi8 of each 16bit lane
-    let rlo = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0x0F00_u16 as i16)), 0);
-    let rhi = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, std::arch::x86_64::_mm_set1_epi16(0xF000_u16 as i16)), 12);
+    let rlo = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, mask_bcd_lo), 0);
+    let rhi = std::arch::x86_64::_mm_srli_epi16(std::arch::x86_64::_mm_and_si128(res, mask_bcd_hi), 12);
 
     // bcd coded digits in each byte
     res = std::arch::x86_64::_mm_or_si128(rlo, rhi);
@@ -88,8 +96,48 @@ unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
     res
 }
 
+#[inline(always)]
+unsafe fn simd_double_dabble_256(numbers: &[u16; 16]) -> std::arch::x86_64::__m256i {
+    let mut res = std::arch::x86_64::_mm256_loadu_si256(numbers.as_ptr() as *const _);
+
+    // increment bcd digits which are > 4 by 3
+    let lookup_lo = std::arch::x86_64::_mm_setr_epi8(0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3);
+    let lookup_lo = std::arch::x86_64::_mm256_broadcastsi128_si256(lookup_lo);
+    let lookup_hi = std::arch::x86_64::_mm256_slli_epi16(lookup_lo, 4);
+    // let lookup_hi = std::arch::x86_64::_mm_setr_epi8(0, 0, 0, 0, 0, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48);
+    // let lookup_hi = std::arch::x86_64::_mm256_broadcastsi128_si256(lookup_hi);
+    let mask_bcd_lo = std::arch::x86_64::_mm256_set1_epi16(0x0F00_u16 as i16);
+    let mask_bcd_hi = std::arch::x86_64::_mm256_set1_epi16(0xF000_u16 as i16);
+    let mask_bcd = std::arch::x86_64::_mm256_or_si256(mask_bcd_lo, mask_bcd_hi);
+
+    res = std::arch::x86_64::_mm256_slli_epi16(res, 3 + 8 - 7);
+    for _i in 3..7 {
+        let bcd_lo = res;
+        let bcd_hi = std::arch::x86_64::_mm256_srli_epi16(res, 4);
+
+        let inc_lo = std::arch::x86_64::_mm256_shuffle_epi8(lookup_lo, bcd_lo);
+        let inc_hi = std::arch::x86_64::_mm256_shuffle_epi8(lookup_hi, bcd_hi);
+
+        let inc = std::arch::x86_64::_mm256_and_si256(std::arch::x86_64::_mm256_or_si256(inc_lo, inc_hi), mask_bcd);
+
+        res = std::arch::x86_64::_mm256_add_epi16(res, inc);
+        res = std::arch::x86_64::_mm256_slli_epi16(res, 1);
+    }
+
+    // 2 bcd coded digits in hi8 of each 16bit lane
+    let rlo = std::arch::x86_64::_mm256_srli_epi16(std::arch::x86_64::_mm256_and_si256(res, mask_bcd_lo), 0);
+    let rhi = std::arch::x86_64::_mm256_srli_epi16(std::arch::x86_64::_mm256_and_si256(res, mask_bcd_hi), 12);
+
+    // bcd coded digits in each byte
+    res = std::arch::x86_64::_mm256_or_si256(rlo, rhi);
+
+    res
+}
+
+
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: -MM-ddThh:mm:ss.
+#[inline(always)]
 unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: u16, day: u16, hour: u16, minute: u16, second: u16) {
     let mut res = simd_double_dabble(&[0, 0, 0, second, minute, hour, day, month]);
 
@@ -101,6 +149,7 @@ unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: u16, day: u16,
 
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: YYYY-MM-ddThh:mm:ss.
+#[inline(always)]
 unsafe fn format_yyyymmddhhmm_double_dabble(buffer: *mut u8, year_hi: u16, year_lo: u16, month: u16, day: u16, hour: u16, minute: u16) {
     let mut res = simd_double_dabble(&[year_hi, year_lo, month, day, hour, minute, 0, 0]);
 
@@ -112,10 +161,11 @@ unsafe fn format_yyyymmddhhmm_double_dabble(buffer: *mut u8, year_hi: u16, year_
 
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: YYYY-MM-ddThh:mm:ss.
-unsafe fn format_ssSSS_double_dabble(buffer: *mut u8, second: u16, milli: u16) {
-    let mut res = simd_double_dabble(&[milli / 100, milli % 100 / 10, milli % 10, second, 0, 0, 0, 0]);
+#[inline(always)]
+unsafe fn format_ssSSS_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16, milli_lo: u16) {
+    let mut res = simd_double_dabble(&[milli_hi, milli_lo, second, 0, 0, 0, 0, 0]);
 
-    res = std::arch::x86_64::_mm_shuffle_epi8(res, std::arch::x86_64::_mm_setr_epi8(-1, 6, 7, -1, 1, 3,5, -1, -1, -1, -1, -1, -1, -1, -1, -1));
+    res = std::arch::x86_64::_mm_shuffle_epi8(res, std::arch::x86_64::_mm_setr_epi8(-1, 4, 5, -1, 1, 2,3, -1, -1, -1, -1, -1, -1, -1, -1, -1));
     res = std::arch::x86_64::_mm_add_epi8(res, std::arch::x86_64::_mm_loadu_si128(PATTERN_COMPLETE.as_ptr().add(16) as *const __m128i));
 
     // (buffer as *mut i64).write(std::arch::x86_64::_mm_extract_epi64(res, 0));
@@ -147,12 +197,13 @@ pub fn format_simd_dd_to_slice(slice: &mut[u8], year: u32, month: u32, day: u32,
 
     unsafe {
         format_yyyymmddhhmm_double_dabble(slice.as_mut_ptr().add(0), (year / 100) as u16, (year % 100) as u16, month as u16, day as u16, hour as u16, minute as u16);
-        format_ssSSS_double_dabble(slice.as_mut_ptr().add(16), second as u16, millisecond as u16);
+        format_ssSSS_double_dabble(slice.as_mut_ptr().add(16), second as u16, (millisecond / 100) as u16, (millisecond % 100) as u16);
     };
 
     //unsafe { asm!("#LLVM-MCA-END format_simd_dd") };
 }
 
+#[inline]
 pub fn format_scalar_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_scalar") };
     let slice = &mut slice[0..24];
