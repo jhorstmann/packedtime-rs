@@ -2,7 +2,7 @@ use std::arch::x86_64::{__m128i, __m256i};
 
 use crate::error::*;
 use crate::util::debug_m128;
-use chrono::{NaiveDate, NaiveTime, NaiveDateTime};
+use crate::convert::to_epoch_day;
 
 #[repr(C)]
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -17,7 +17,7 @@ struct SimdTimestamp {
     pad2: u16,
 }
 
-static_assertions::const_assert!(std::mem::size_of::<SimdTimestamp>() == 16);
+const _: () = { assert!(std::mem::size_of::<SimdTimestamp>() == 16); };
 
 impl SimdTimestamp {
     fn new(year: u16, month: u16, day: u16, hour: u16, minute: u16) -> Self {
@@ -74,36 +74,10 @@ impl Timestamp {
     }
 }
 
-const SECONDS_PER_DAY: i64 = 86400;
-const DAYS_PER_CYCLE: i64 = 146097;
-const DAYS_0000_TO_1970: i64 = (DAYS_PER_CYCLE * 5) - (30 * 365 + 7);
-
-#[inline(always)]
-fn to_epoch_day(year: u32, month: u32, day: u32) -> i64 {
-    let y = year as i64;
-    let m = month as i64;
-    let d = day as i64;
-    let mut total: i64 = 0;
-    total += 365 * y;
-    if y >= 0 {
-        total += (y + 3) / 4 - (y + 99) / 100 + (y + 399) / 400;
-    } else {
-        total -= y / -4 - y / -100 + y / -400;
-    }
-    total += ((367 * m - 362) / 12);
-    total += d - 1;
-    if m > 2 {
-        total -= 1;
-        if !((y % 4 == 0 && y % 100 != 0) || y % 400 == 0) {
-            total -= 1;
-        }
-    }
-    return total - DAYS_0000_TO_1970;
-}
 
 #[inline(always)]
 fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
-    let epoch_day = to_epoch_day(ts.year as u32, ts.month as u32, ts.day as u32);
+    let epoch_day = to_epoch_day(ts.year as i32, ts.month as i32, ts.day as i32) as i64;
 
     let h = ts.hour as i64;
     let m = ts.minute as i64;

@@ -37,8 +37,9 @@ const SECONDS_PER_DAY: i32 = 86400;
 const DAYS_PER_CYCLE: i32 = 146097;
 const DAYS_0000_TO_1970: i32 = (DAYS_PER_CYCLE * 5) - (30 * 365 + 7);
 
-const SUPPORT_NEGATIVE_YEAR: bool = false;
+const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
 
+const SUPPORT_NEGATIVE_YEAR: bool = false;
 
 /// branchless calculation of whether the given year is a leap year
 #[inline]
@@ -48,15 +49,16 @@ fn is_leap_year(year: i32) -> bool {
 
 /// Convert a date to the number of days since the unix epoch 1970-01-01.
 /// See https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java#L1634
-fn to_epoch_day(year: i32, month: i32, day: i32) -> i32 {
+#[inline]
+pub(crate) fn to_epoch_day(year: i32, month: i32, day: i32) -> i32 {
     let y = year;
     let m = month;
     let mut total = 365 * y;
 
-    total += if y >= 0 || !SUPPORT_NEGATIVE_YEAR {
-        (y + 3) / 4 - (y + 99) / 100 + (y + 399) / 400
-    } else {
+    total += if y < 0 && SUPPORT_NEGATIVE_YEAR {
         -(y / -4 - y / -100 + y / -400)
+    } else {
+        (y + 3) / 4 - (y + 99) / 100 + (y + 399) / 400
     };
 
     total += ((367 * m - 362) / 12);
@@ -70,19 +72,13 @@ fn to_epoch_day(year: i32, month: i32, day: i32) -> i32 {
     } else {
         0
     };
-    /*
-    if (m > 2) {
-        total -= 1;
-        if (!is_leap_year(year)) {
-            total -= 1;
-        }
-    }
-    */
-    return total - DAYS_0000_TO_1970;
+
+    total - DAYS_0000_TO_1970
 }
 
 /// Convert the number of days since the unix epoch into a (year, month, day) tuple.
 /// See https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java#L281
+#[inline]
 fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
     let mut zero_day = epoch_days + DAYS_0000_TO_1970;
     // find the march-based year
@@ -113,12 +109,84 @@ fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
     (year_est, month, dom)
 }
 
+
+#[inline]
+pub fn timestamp_millis_to_epoch_days(ts: i64) -> i32 {
+    // max 4-digit year timestamp needs about 49 bits
+    // masking helps the compiler to replace the division with multiplication and shifts
+    ((ts & ((1 << 49)-1)) / MILLIS_PER_DAY) as i32
+}
+
+#[inline]
+pub fn timestamp_float_to_epoch_days(ts: f64) -> i32 {
+    unsafe { (ts * (1.0 / MILLIS_PER_DAY as f64)).to_int_unchecked() }
+}
+
+#[inline]
+pub fn date_trunc_month_epoch_days(epoch_days: i32) -> i32 {
+    let (y, m, d) = from_epoch_day(epoch_days);
+    to_epoch_day(y, m, 0)
+}
+
+#[inline]
+pub fn date_trunc_month_timestamp_millis(ts: i64) -> i64 {
+    let epoch_days = timestamp_millis_to_epoch_days(ts);
+    let truncated = date_trunc_month_epoch_days(epoch_days) as i64;
+    truncated * MILLIS_PER_DAY
+}
+
+#[inline]
+pub fn date_trunc_month_timestamp_millis_float(ts: f64) -> f64 {
+    let epoch_days = timestamp_float_to_epoch_days(ts);
+    let truncated = date_trunc_month_epoch_days(epoch_days) as f64;
+    truncated * (MILLIS_PER_DAY as f64)
+}
+
+#[inline]
+pub fn date_trunc_year_epoch_days(epoch_days: i32) -> i32 {
+    let (y, m, d) = from_epoch_day(epoch_days);
+    to_epoch_day(y, 0, 0)
+}
+
+#[inline]
+pub fn date_trunc_year_timestamp_millis(ts: i64) -> i64 {
+    let epoch_days = timestamp_millis_to_epoch_days(ts);
+    let truncated = date_trunc_year_epoch_days(epoch_days) as i64;
+    truncated * MILLIS_PER_DAY
+}
+
+#[inline]
+pub fn date_trunc_year_timestamp_millis_float(ts: f64) -> f64 {
+    let epoch_days = timestamp_float_to_epoch_days(ts);
+    let truncated = date_trunc_year_epoch_days(epoch_days) as f64;
+    truncated * (MILLIS_PER_DAY as f64)
+}
+
+#[inline]
+pub fn date_trunc_quarter_epoch_days(epoch_days: i32) -> i32 {
+    let (y, m, d) = from_epoch_day(epoch_days);
+    to_epoch_day(y, m / 4, 0)
+}
+
+#[inline]
+pub fn date_trunc_quarter_timestamp_millis(ts: i64) -> i64 {
+    let epoch_days = timestamp_millis_to_epoch_days(ts);
+    let truncated = date_trunc_quarter_epoch_days(epoch_days) as i64;
+    truncated * MILLIS_PER_DAY
+}
+
+#[inline]
+pub fn date_trunc_quarter_timestamp_millis_float(ts: f64) -> f64 {
+    let epoch_days = timestamp_float_to_epoch_days(ts);
+    let truncated = date_trunc_quarter_epoch_days(epoch_days) as f64;
+    truncated * (MILLIS_PER_DAY as f64)
+}
+
 #[cfg(test)]
 mod tests {
 
     #[test]
     fn test_to_epoch_day() {
-        // assert_eq!(0, super::to_epoch_day(1, 1, 0));
         assert_eq!(0, super::to_epoch_day(1970, 1, 1));
         assert_eq!(18998, super::to_epoch_day(2022, 1, 6));
     }

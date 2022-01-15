@@ -6,17 +6,15 @@ edition = "2018"
 
 [profile.release]
 opt-level = 3
-lto = "fat"
-codegen-units = 1
+debug = 2
 
 [dependencies]
-static_assertions = "1.1.0"
-chrono = "0.4.15"
-
 
 [dev-dependencies]
 criterion = "0.3"
+chrono = "0.4.15"
 iso8601 = "0.4.0"
+rand = "0.8"
 
 [[bench]]
 name = "bench_format"

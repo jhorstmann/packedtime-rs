@@ -5,9 +5,13 @@ use crate::util::{debug_m128, debug_m256};
 const PATTERN_COMPLETE: &str = "0000-00-00T00:00:00.000Z00:00:00";
 const PATTERN_AFTER_YEAR: &str = "-00-00T00:00:00.";
 
-static_assertions::const_assert!(PATTERN_COMPLETE.len() == 32);
-static_assertions::const_assert!(PATTERN_AFTER_YEAR.len() == 16);
+const _: () = {
+    assert!(PATTERN_COMPLETE.len() == 32);
+    assert!(PATTERN_AFTER_YEAR.len() == 16);
+};
 
+
+#[inline]
 pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_mul") };
 
@@ -46,9 +50,13 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
         let fmt_lo = std::arch::x86_64::_mm_insert_epi8(fmt_lo, (millisecond % 10) as i32, 6);
 
         // add '0' and separator ascii values
-        let pattern = std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i);
-        let fmt_lo = std::arch::x86_64::_mm_or_si128(fmt_lo, std::arch::x86_64::_mm256_extractf128_si256(pattern, 1));
-        let fmt_hi = std::arch::x86_64::_mm_or_si128(fmt_hi, std::arch::x86_64::_mm256_extractf128_si256(pattern, 0));
+        // let pattern = std::arch::x86_64::_mm256_loadu_si256(PATTERN_COMPLETE.as_ptr() as *const __m256i);
+        // let pattern_lo = std::arch::x86_64::_mm256_extractf128_si256(pattern, 1);
+        // let pattern_hi = std::arch::x86_64::_mm256_extractf128_si256(pattern, 0);
+        let pattern_lo = std::arch::x86_64::_mm_loadu_si128(PATTERN_COMPLETE.as_ptr().add(16) as *const _);
+        let pattern_hi = std::arch::x86_64::_mm_loadu_si128(PATTERN_COMPLETE.as_ptr().add(0) as *const _);
+        let fmt_lo = std::arch::x86_64::_mm_or_si128(fmt_lo, pattern_lo);
+        let fmt_hi = std::arch::x86_64::_mm_or_si128(fmt_hi, pattern_hi);
 
         std::arch::x86_64::_mm_storeu_si128(slice.as_mut_ptr() as *mut __m128i, fmt_hi);
         std::arch::x86_64::_mm_storel_epi64(slice.as_mut_ptr().offset(16) as *mut __m128i, fmt_lo);
@@ -172,6 +180,7 @@ unsafe fn format_ssSSS_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16
     std::arch::x86_64::_mm_storel_epi64(buffer as *mut __m128i, res);
 }
 
+#[inline]
 pub fn format_simd_dd_to_slice(slice: &mut[u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_dd") };
 
