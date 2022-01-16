@@ -1,6 +1,6 @@
-use chrono::{Datelike, NaiveDateTime, NaiveDate, NaiveTime, Timelike};
+use chrono::{Datelike, NaiveDateTime, NaiveDate, NaiveTime};
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use packedtime_rs::{date_trunc_month_timestamp_millis, date_trunc_year_timestamp_millis};
+use packedtime_rs::{date_trunc_month_timestamp_millis, date_trunc_month_timestamp_millis_float, date_trunc_year_timestamp_millis, date_trunc_year_timestamp_millis_float};
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -20,6 +20,24 @@ fn bench_date_trunc_month(input: &[i64], output: &mut [i64]) {
         .zip(input.iter().copied())
         .for_each(|(output, input)| {
             *output = date_trunc_month_timestamp_millis(input);
+        });
+}
+
+#[inline(never)]
+fn bench_date_trunc_year_float(input: &[f64], output: &mut [f64]) {
+    output.iter_mut()
+        .zip(input.iter().copied())
+        .for_each(|(output, input)| {
+            *output = date_trunc_year_timestamp_millis_float(input);
+        });
+}
+
+#[inline(never)]
+fn bench_date_trunc_month_float(input: &[f64], output: &mut [f64]) {
+    output.iter_mut()
+        .zip(input.iter().copied())
+        .for_each(|(output, input)| {
+            *output = date_trunc_month_timestamp_millis_float(input);
         });
 }
 
@@ -55,7 +73,10 @@ pub fn bench_date_trunc(c: &mut Criterion) {
         rng.gen_range(0..4102444800_000_i64)
     }).collect::<Vec<_>>();
 
+    let input_float = input.iter().map(|i| *i as f64).collect::<Vec<_>>();
+
     let mut output = vec!(0_i64; BATCH_SIZE);
+    let mut output_float = vec!(0_f64; BATCH_SIZE);
 
     c.benchmark_group("date_trunc")
         .throughput(Throughput::Bytes((BATCH_SIZE * 2 * std::mem::size_of::<i64>()) as u64))
@@ -64,6 +85,12 @@ pub fn bench_date_trunc(c: &mut Criterion) {
         })
         .bench_function("date_trunc_month", |b| {
             b.iter(|| bench_date_trunc_month(&input, &mut output))
+        })
+        .bench_function("date_trunc_year_float", |b| {
+            b.iter(|| bench_date_trunc_year_float(&input_float, &mut output_float))
+        })
+        .bench_function("date_trunc_month_float", |b| {
+            b.iter(|| bench_date_trunc_month_float(&input_float, &mut output_float))
         })
         .bench_function("date_trunc_year_chrono", |b| {
             b.iter(|| bench_date_trunc_year_chrono(&input, &mut output))
