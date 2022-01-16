@@ -12,8 +12,7 @@ debug = 2
 
 [dev-dependencies]
 criterion = "0.3"
-chrono = "0.4.15"
-iso8601 = "0.4.0"
+chrono = "0.4.19"
 rand = "0.8"
 
 [[bench]]
