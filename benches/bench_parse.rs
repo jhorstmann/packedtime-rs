@@ -1,10 +1,8 @@
-use std::fmt::Formatter;
 use std::fmt::Write;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use packedtime_rs::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd, ParseResult};
 
-use std::str::FromStr;
-use chrono::{FixedOffset, NaiveDateTime};
+use chrono::NaiveDateTime;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};

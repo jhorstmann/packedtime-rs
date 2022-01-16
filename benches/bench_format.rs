@@ -1,5 +1,5 @@
 use chrono::{Datelike, NaiveDateTime, Timelike};
-use criterion::{criterion_group, criterion_main, Criterion, black_box, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use packedtime_rs::format_scalar_to_slice;
 use packedtime_rs::format_simd_dd_to_slice;
 use packedtime_rs::format_simd_mul_to_slice;
@@ -39,7 +39,7 @@ pub fn bench_format(c: &mut Criterion) {
 
     let mut rng = StdRng::seed_from_u64(42);
 
-    let input = input.iter().map(|ts| {
+    let input = (0..BATCH_SIZE).map(|_| {
         let ts = rng.gen_range(0..4102444800_000_i64);
         let ndt = NaiveDateTime::from_timestamp(ts / 1000, 0);
         (ndt.year() as u32, ndt.month(), ndt.day(), ndt.hour(), ndt.minute(), ndt.second(), (ts % 1000) as u32)
