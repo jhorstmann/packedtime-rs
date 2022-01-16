@@ -6,6 +6,7 @@ edition = "2018"
 
 [profile.release]
 opt-level = 3
+lto = "fat"
 debug = 2
 
 [dependencies]
@@ -21,4 +22,8 @@ harness = false
 
 [[bench]]
 name = "bench_parse"
+harness = false
+
+[[bench]]
+name = "bench_date_trunc"
 harness = false

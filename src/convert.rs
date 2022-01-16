@@ -112,9 +112,8 @@ fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
 
 #[inline]
 pub fn timestamp_millis_to_epoch_days(ts: i64) -> i32 {
-    // max 4-digit year timestamp needs about 49 bits
-    // masking helps the compiler to replace the division with multiplication and shifts
-    ((ts & ((1 << 49)-1)) / MILLIS_PER_DAY) as i32
+    // todo: find a way to get this vectorizable using integer operations or verify it is exact for all timestamps
+    timestamp_float_to_epoch_days(ts as f64)
 }
 
 #[inline]

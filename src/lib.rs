@@ -15,3 +15,4 @@ pub use packed::*;
 pub use error::*;
 pub use format::*;
 pub use parse::*;
+pub use convert::*;
