@@ -20,7 +20,7 @@ fn bench_scalar(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mu
 fn bench_simd_mul(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mut [u8]) {
     output.chunks_mut(24)
         .zip(input_parts.iter().copied())
-        .for_each(|(ouput, (year, month, day, hour, minute, second, milli))| {
+        .for_each(|(ouput, (year, month, day, hour, minute, second, milli))| unsafe {
             format_simd_mul_to_slice(ouput, year, month, day, hour, minute, second, milli)
         });
 }
@@ -29,7 +29,7 @@ fn bench_simd_mul(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &
 fn bench_simd_dd(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mut [u8]) {
     output.chunks_mut(24)
         .zip(input_parts.iter().copied())
-        .for_each(|(ouput, (year, month, day, hour, minute, second, milli))| {
+        .for_each(|(ouput, (year, month, day, hour, minute, second, milli))| unsafe {
             format_simd_dd_to_slice(ouput, year, month, day, hour, minute, second, milli)
         });
 }

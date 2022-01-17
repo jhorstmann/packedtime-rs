@@ -1,5 +1,4 @@
-use std::arch::x86_64::{__m128i, __m256i};
-use std::arch::x86_64::*;
+use std::arch::x86_64::{__m128i};
 use crate::util::{debug_m128, debug_m256};
 
 const PATTERN_COMPLETE: &str = "0000-00-00T00:00:00.000Z00:00:00";
@@ -12,7 +11,8 @@ const _: () = {
 
 
 #[inline]
-pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
+#[target_feature(enable = "sse2,ssse3,sse4.1")]
+pub unsafe fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_mul") };
 
     let slice = &mut slice[0..24];
@@ -66,7 +66,8 @@ pub fn format_simd_mul_to_slice(slice: &mut [u8], year: u32, month: u32, day: u3
     //unsafe { asm!("#LLVM-MCA-END format_simd_mul") };
 }
 
-#[inline(always)]
+#[inline]
+#[target_feature(enable = "sse2,ssse3,sse4.1")]
 unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
     let mut res = std::arch::x86_64::_mm_loadu_si128(numbers.as_ptr() as *const _);
 
@@ -145,7 +146,8 @@ unsafe fn simd_double_dabble_256(numbers: &[u16; 16]) -> std::arch::x86_64::__m2
 
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: -MM-ddThh:mm:ss.
-#[inline(always)]
+#[inline]
+#[target_feature(enable = "sse2,ssse3")]
 unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: u16, day: u16, hour: u16, minute: u16, second: u16) {
     let mut res = simd_double_dabble(&[0, 0, 0, second, minute, hour, day, month]);
 
@@ -157,7 +159,8 @@ unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: u16, day: u16,
 
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: YYYY-MM-ddThh:mm:ss.
-#[inline(always)]
+#[inline]
+#[target_feature(enable = "sse2,ssse3")]
 unsafe fn format_yyyymmddhhmm_double_dabble(buffer: *mut u8, year_hi: u16, year_lo: u16, month: u16, day: u16, hour: u16, minute: u16) {
     let mut res = simd_double_dabble(&[year_hi, year_lo, month, day, hour, minute, 0, 0]);
 
@@ -169,8 +172,9 @@ unsafe fn format_yyyymmddhhmm_double_dabble(buffer: *mut u8, year_hi: u16, year_
 
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: YYYY-MM-ddThh:mm:ss.
-#[inline(always)]
-unsafe fn format_ssSSS_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16, milli_lo: u16) {
+#[inline]
+#[target_feature(enable = "sse2,ssse3")]
+unsafe fn format_ss_sss_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16, milli_lo: u16) {
     let mut res = simd_double_dabble(&[milli_hi, milli_lo, second, 0, 0, 0, 0, 0]);
 
     res = std::arch::x86_64::_mm_shuffle_epi8(res, std::arch::x86_64::_mm_setr_epi8(-1, 4, 5, -1, 1, 2,3, -1, -1, -1, -1, -1, -1, -1, -1, -1));
@@ -181,32 +185,15 @@ unsafe fn format_ssSSS_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16
 }
 
 #[inline]
-pub fn format_simd_dd_to_slice(slice: &mut[u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
+#[target_feature(enable = "sse2,ssse3")]
+pub unsafe fn format_simd_dd_to_slice(slice: &mut[u8], year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) {
     //unsafe { asm!("#LLVM-MCA-BEGIN format_simd_dd") };
 
     let slice = &mut slice[0..24];
 
-    // slice[0] = ('0' as u8 + ((year / 1000) as u8));
-    // slice[1] = ('0' as u8 + ((year / 100 % 10) as u8));
-    // slice[2] = ('0' as u8 + ((year / 10 % 10) as u8));
-    // slice[3] = ('0' as u8 + ((year % 10) as u8));
-
-/*
-    slice[16] = ':' as u8;
-    slice[17] = ('0' as u8 + (second / 10) as u8);
-    slice[18] = ('0' as u8 + (second % 10) as u8);
-    slice[19] = '.' as u8;
-
-    slice[20] = ('0' as u8 + ((millisecond / 100 % 10) as u8));
-    slice[21] = ('0' as u8 + ((millisecond / 10 % 10) as u8));
-    slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
-
-    slice[23] = ('Z' as u8);
-*/
-
     unsafe {
         format_yyyymmddhhmm_double_dabble(slice.as_mut_ptr().add(0), (year / 100) as u16, (year % 100) as u16, month as u16, day as u16, hour as u16, minute as u16);
-        format_ssSSS_double_dabble(slice.as_mut_ptr().add(16), second as u16, (millisecond / 100) as u16, (millisecond % 100) as u16);
+        format_ss_sss_double_dabble(slice.as_mut_ptr().add(16), second as u16, (millisecond / 100) as u16, (millisecond % 100) as u16);
     };
 
     //unsafe { asm!("#LLVM-MCA-END format_simd_dd") };

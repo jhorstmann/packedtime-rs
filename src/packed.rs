@@ -5,6 +5,7 @@
 
 use crate::format::*;
 use std::fmt::{Display, Debug, Formatter};
+use std::str::from_utf8_unchecked;
 
 const OFFSET_BITS: u32 = 12;
 const MILLI_BITS: u32 = 10;
@@ -102,41 +103,53 @@ impl Packedtime {
         ((self.0 >> (OFFSET_BITS)) & ((1 << MILLI_BITS) - 1)) as u32
     }
 
-    pub fn format(&self) -> String {
-        let mut buffer: Vec<u8> = Vec::with_capacity(24);
+    pub fn to_rfc3339_string(&self) -> String {
+        let mut buffer = vec![0_u8; 24];
 
-        unsafe {buffer.set_len(24) };
-
-        let slice = &mut buffer.as_mut_slice()[0..24];
-
-        format_scalar_to_slice(slice, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        #[cfg(target_feature = "sse4.1")]
+            unsafe {
+                format_simd_mul_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+            }
+        #[cfg(not(target_feature = "sse4.1"))]
+            {
+                format_scalar_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+            }
 
         #[cfg(not(debug_assertions))]
             return unsafe { String::from_utf8_unchecked(buffer) };
         #[cfg(debug_assertions)]
-            return String::from_utf8(buffer).unwrap();
+            return String::from_utf8(buffer).expect("utf8 string");
     }
 }
 
 impl Display for Packedtime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond()))
+        let mut buffer = [0_u8; 24];
+        #[cfg(target_feature = "sse4.1")]
+            unsafe {
+                format_simd_mul_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+            }
+        #[cfg(not(target_feature = "sse4.1"))]
+            {
+                format_scalar_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+            }
+        f.write_str(unsafe { from_utf8_unchecked(&buffer) })
     }
 }
 
 impl Debug for Packedtime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        <Packedtime as Display>::fmt(&self, f)
+        f.write_fmt(format_args!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond()))
     }
 }
 
 pub mod tests {
-    use crate::Packedtime;
+    use super::Packedtime;
 
     #[test]
     fn test_format() {
-        assert_eq!("2020-12-24T17:30:15.010Z".to_owned(), Packedtime::new_utc(2020, 12, 24, 17, 30, 15, 10).format());
-        assert_eq!("2020-09-10T17:30:15.123Z".to_owned(), Packedtime::new_utc(2020, 9, 10, 17, 30, 15, 123).format());
+        assert_eq!("2020-12-24T17:30:15.010Z".to_owned(), Packedtime::new_utc(2020, 12, 24, 17, 30, 15, 10).to_rfc3339_string());
+        assert_eq!("2020-09-10T17:30:15.123Z".to_owned(), Packedtime::new_utc(2020, 9, 10, 17, 30, 15, 123).to_rfc3339_string());
     }
 
 

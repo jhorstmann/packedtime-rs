@@ -1,4 +1,4 @@
-use std::arch::x86_64::{__m128i, __m256i};
+use std::arch::x86_64::__m128i;
 
 use crate::error::*;
 use crate::util::debug_m128;
@@ -379,22 +379,8 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
 
     let offset_minutes = 0;
 
-    let (second, milli) = if input.len() == 24 {
-        // fastpath for ':23.567Z'
-
-        let min: u64 = unsafe { std::ptr::read_unaligned(b":00.000Z".as_ptr() as *const u64) };
-        let max: u64 = unsafe { std::ptr::read_unaligned(b":99.999Z".as_ptr() as *const u64) };
-        let buf = unsafe { std::ptr::read_unaligned(input.as_ptr().add(16) as *const u64) };
-        if buf < min || buf > max {
-            // todo: return correct error offset
-            return Err(ParseError::InvalidChar(16));
-        }
-
-        let buf = unsafe { std::mem::transmute::<u64, [u8; 8]>(buf) };
-
-        let second = (buf[1] - b'0') as u32 * 10 + (buf[2] - b'0') as u32;
-        let milli = (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
-        (second, milli)
+    let (second, milli) = if let Some(tuple) = try_parse_seconds_and_millis_simd(bytes) {
+        tuple
     } else {
         let mut index = 16;
         let (second, nano) = parse_seconds_and_nanos_slow_path(bytes, &mut index)?;
@@ -417,9 +403,30 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
     Ok(result)
 }
 
+fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32)> {
+    if input.len() == 24 {
+        let min: u64 = unsafe { std::ptr::read_unaligned(b":00.000Z".as_ptr() as *const u64) };
+        let max: u64 = unsafe { std::ptr::read_unaligned(b":99.999Z".as_ptr() as *const u64) };
+        let buf = unsafe { std::ptr::read_unaligned(input.as_ptr().add(16) as *const u64) };
+
+        if buf < min || buf > max {
+            return None
+        }
+
+        let buf = unsafe { std::mem::transmute::<u64, [u8; 8]>(buf) };
+
+        let second = (buf[1] - b'0') as u32 * 10 + (buf[2] - b'0') as u32;
+        let milli = (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
+
+        Some((second, milli))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{parse_simd, parse_scalar, SimdTimestamp, Timestamp};
+    use crate::parse::{parse_simd, parse_scalar, Timestamp};
     use crate::error::ParseError;
     use crate::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd};
 

@@ -1,6 +1,6 @@
 use std::fmt::Write;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use packedtime_rs::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd, ParseResult};
+use packedtime_rs::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd};
 
 use chrono::NaiveDateTime;
 
