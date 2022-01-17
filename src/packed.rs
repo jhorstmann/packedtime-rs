@@ -40,6 +40,7 @@ const _: () = {
 pub struct Packedtime(u64);
 
 impl Packedtime {
+    #[inline]
     pub fn new_utc(
         year: i32,
         month: u32,
@@ -75,45 +76,57 @@ impl Packedtime {
         Self(value)
     }
 
+    #[inline]
     pub fn year(&self) -> u32 {
         (self.0 >> (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) as u32
     }
 
+    #[inline]
     pub fn month(&self) -> u32 {
         ((self.0 >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MONTH_BITS) - 1)) as u32
     }
 
+    #[inline]
     pub fn day(&self) -> u32 {
         ((self.0 >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << DAY_BITS) - 1)) as u32
     }
 
+    #[inline]
     pub fn hour(&self) -> u32 {
         ((self.0 >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << HOUR_BITS) - 1)) as u32
     }
 
+    #[inline]
     pub fn minute(&self) -> u32 {
         ((self.0 >> (SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MINUTE_BITS) - 1)) as u32
     }
 
+    #[inline]
     pub fn second(&self) -> u32 {
         ((self.0 >> (MILLI_BITS + OFFSET_BITS)) & ((1 << SECOND_BITS) - 1)) as u32
     }
 
+    #[inline]
     pub fn millisecond(&self) -> u32 {
         ((self.0 >> (OFFSET_BITS)) & ((1 << MILLI_BITS) - 1)) as u32
+    }
+
+    #[inline]
+    pub fn write_rfc3339_str(&self, buffer: &mut [u8]) {
+        #[cfg(target_feature = "sse4.1")]
+            unsafe {
+            format_simd_mul_to_slice(buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        }
+        #[cfg(not(target_feature = "sse4.1"))]
+            {
+                format_scalar_to_slice(buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+            }
     }
 
     pub fn to_rfc3339_string(&self) -> String {
         let mut buffer = vec![0_u8; 24];
 
-        #[cfg(target_feature = "sse4.1")]
-            unsafe {
-                format_simd_mul_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
-            }
-        #[cfg(not(target_feature = "sse4.1"))]
-            {
-                format_scalar_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
-            }
+        self.write_rfc3339_str(&mut buffer);
 
         #[cfg(not(debug_assertions))]
             return unsafe { String::from_utf8_unchecked(buffer) };
