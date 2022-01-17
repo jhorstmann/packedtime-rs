@@ -217,43 +217,43 @@ pub fn format_scalar_to_slice(slice: &mut [u8], year: u32, month: u32, day: u32,
     //unsafe { asm!("#LLVM-MCA-BEGIN format_scalar") };
     let slice = &mut slice[0..24];
 
-    slice[0] = ('0' as u8 + ((year / 1000) as u8));
-    slice[1] = ('0' as u8 + ((year / 100 % 10) as u8));
-    slice[2] = ('0' as u8 + ((year / 10 % 10) as u8));
-    slice[3] = ('0' as u8 + ((year % 10) as u8));
+    slice[0] = (b'0' + ((year / 1000) as u8));
+    slice[1] = (b'0' + ((year / 100 % 10) as u8));
+    slice[2] = (b'0' + ((year / 10 % 10) as u8));
+    slice[3] = (b'0' + ((year % 10) as u8));
 
-    slice[4] = '-' as u8;
+    slice[4] = b'-';
 
-    slice[5] = ('0' as u8 + ((month / 10) as u8));
-    slice[6] = ('0' as u8 + ((month % 10) as u8));
+    slice[5] = (b'0' + ((month / 10) as u8));
+    slice[6] = (b'0' + ((month % 10) as u8));
 
-    slice[7] = '-' as u8;
+    slice[7] = b'-';
 
-    slice[8] = ('0' as u8 + ((day / 10) as u8));
-    slice[9] = ('0' as u8 + ((day % 10) as u8));
+    slice[8] = (b'0' + ((day / 10) as u8));
+    slice[9] = (b'0' + ((day % 10) as u8));
 
-    slice[10] = 'T' as u8;
+    slice[10] = b'T';
 
-    slice[11] = ('0' as u8 + ((hour / 10) as u8));
-    slice[12] = ('0' as u8 + ((hour % 10) as u8));
+    slice[11] = (b'0' + ((hour / 10) as u8));
+    slice[12] = (b'0' + ((hour % 10) as u8));
 
-    slice[13] = ':' as u8;
+    slice[13] = b':';
 
-    slice[14] = ('0' as u8 + ((minute / 10) as u8));
-    slice[15] = ('0' as u8 + ((minute % 10) as u8));
+    slice[14] = (b'0' + ((minute / 10) as u8));
+    slice[15] = (b'0' + ((minute % 10) as u8));
 
-    slice[16] = ':' as u8;
+    slice[16] = b':';
 
-    slice[17] = ('0' as u8 + ((second / 10) as u8));
-    slice[18] = ('0' as u8 + ((second % 10) as u8));
+    slice[17] = (b'0' + ((second / 10) as u8));
+    slice[18] = (b'0' + ((second % 10) as u8));
 
-    slice[19] = '.' as u8;
+    slice[19] = b'.';
 
-    slice[20] = ('0' as u8 + ((millisecond / 100 % 10) as u8));
-    slice[21] = ('0' as u8 + ((millisecond / 10 % 10) as u8));
-    slice[22] = ('0' as u8 + ((millisecond % 10) as u8));
+    slice[20] = (b'0' + ((millisecond / 100 % 10) as u8));
+    slice[21] = (b'0' + ((millisecond / 10 % 10) as u8));
+    slice[22] = (b'0' + ((millisecond % 10) as u8));
 
-    slice[23] = ('Z' as u8);
+    slice[23] = b'Z';
 
     //unsafe { asm!("#LLVM-MCA-END format_scalar") };
 }
