@@ -5,7 +5,6 @@
 
 use crate::format::*;
 use std::fmt::{Display, Debug, Formatter};
-use std::str::from_utf8_unchecked;
 
 const OFFSET_BITS: u32 = 12;
 const MILLI_BITS: u32 = 10;
@@ -36,7 +35,7 @@ const _: () = {
 };
 
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Ord, PartialOrd, Eq)]
 pub struct Packedtime(u64);
 
 impl Packedtime {
@@ -52,6 +51,7 @@ impl Packedtime {
     ) -> Self {
         Self::new(year, month, day, hour, minute, second, milli, 0)
     }
+
     pub fn new(
         year: i32,
         month: u32,
@@ -60,7 +60,7 @@ impl Packedtime {
         minute: u32,
         second: u32,
         milli: u32,
-        offset: u32,
+        offset_minutes: u32,
     ) -> Self {
         let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS | day as u64)
             << HOUR_BITS
@@ -72,7 +72,7 @@ impl Packedtime {
             << MILLI_BITS
             | milli as u64)
             << OFFSET_BITS)
-            | offset as u64;
+            | offset_minutes as u64;
         Self(value)
     }
 
@@ -112,52 +112,70 @@ impl Packedtime {
     }
 
     #[inline]
-    pub fn write_rfc3339_str(&self, buffer: &mut [u8]) {
-        #[cfg(target_feature = "sse4.1")]
-            unsafe {
-            format_simd_mul_to_slice(buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
-        }
-        #[cfg(not(target_feature = "sse4.1"))]
-            {
-                format_scalar_to_slice(buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
-            }
+    pub fn offset_minutes(&self) -> u32 {
+        (self.0 & ((1 << OFFSET_BITS) - 1)) as u32
     }
 
+    #[inline]
+    pub fn write_rfc3339_bytes<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<()> {
+        let buffer = self.to_rfc3339_bytes();
+        writer.write_all(&buffer)
+    }
+
+    #[inline]
+    pub fn write_rfc3339_str<W: std::fmt::Write>(&self, mut writer: W) -> std::fmt::Result {
+        let buffer = self.to_rfc3339_bytes();
+        #[cfg(not(debug_assertions))] {
+            writer.write_str(unsafe { std::str::from_utf8_unchecked(&buffer) })
+        }
+        #[cfg(debug_assertions)] {
+            writer.write_str(std::str::from_utf8(&buffer).expect("utf8 string"))
+        }
+    }
+
+    #[inline]
+    pub fn to_rfc3339_bytes(&self) -> [u8; 24] {
+        let mut buffer = [0_u8; 24];
+        #[cfg(target_feature = "sse4.1")] unsafe {
+            format_simd_mul_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        }
+        #[cfg(not(target_feature = "sse4.1"))] {
+            format_scalar_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        }
+        buffer
+    }
+
+    #[inline]
     pub fn to_rfc3339_string(&self) -> String {
-        let mut buffer = vec![0_u8; 24];
-
-        self.write_rfc3339_str(&mut buffer);
-
-        #[cfg(not(debug_assertions))]
-            return unsafe { String::from_utf8_unchecked(buffer) };
-        #[cfg(debug_assertions)]
-            return String::from_utf8(buffer).expect("utf8 string");
+        let buffer = self.to_rfc3339_bytes();
+        #[cfg(not(debug_assertions))] {
+            unsafe { std::str::from_utf8_unchecked(&buffer).to_string() }
+        }
+        #[cfg(debug_assertions)] {
+            std::str::from_utf8(&buffer).expect("utf8 string").to_string()
+        }
     }
 }
 
 impl Display for Packedtime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut buffer = [0_u8; 24];
-        #[cfg(target_feature = "sse4.1")]
-            unsafe {
-                format_simd_mul_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
-            }
-        #[cfg(not(target_feature = "sse4.1"))]
-            {
-                format_scalar_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
-            }
-        f.write_str(unsafe { from_utf8_unchecked(&buffer) })
+        self.write_rfc3339_str(f)
     }
 }
 
 impl Debug for Packedtime {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond()))
+        #[cfg(not(debug_assertions))] {
+            self.write_rfc3339_str(f)
+        }
+        #[cfg(debug_assertions)] {
+            f.write_fmt(format_args!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond()))
+        }
     }
 }
 
 pub mod tests {
-    use super::Packedtime;
+    use super::*;
 
     #[test]
     fn test_format() {

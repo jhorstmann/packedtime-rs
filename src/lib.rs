@@ -1,4 +1,3 @@
-//#![feature(asm)]
 #![allow(unused_parens)]
 #![allow(dead_code)]
 #![allow(unused_variables)]

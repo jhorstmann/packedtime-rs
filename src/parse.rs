@@ -1,7 +1,4 @@
-use std::arch::x86_64::__m128i;
-
 use crate::error::*;
-use crate::util::debug_m128;
 use crate::convert::to_epoch_day;
 
 #[repr(C)]
@@ -43,7 +40,7 @@ struct Timestamp {
     minute: u8,
     second: u8,
     millisecond: u32,
-    offset_second: i32,
+    offset_minute: i32,
 }
 
 impl Timestamp {
@@ -56,7 +53,7 @@ impl Timestamp {
             minute,
             second,
             millisecond,
-            offset_second: 0,
+            offset_minute: 0,
         }
     }
 
@@ -69,7 +66,7 @@ impl Timestamp {
             minute,
             second,
             millisecond,
-            offset_second,
+            offset_minute: offset_second,
         }
     }
 }
@@ -82,7 +79,7 @@ fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
     let h = ts.hour as i64;
     let m = ts.minute as i64;
     let s = ts.second as i64;
-    let os = ts.offset_second as i64;
+    let os = ts.offset_minute as i64;
     let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s as i64 - os;
 
     return seconds * 1000 + ts.millisecond as i64;
@@ -110,8 +107,7 @@ fn parse_scalar(str: &str) -> ParseResult<Timestamp> {
 
     let (second, nano) = parse_seconds_and_nanos(bytes, &mut index)?;
 
-    // TODO: parse offset when simd impl can also do it
-    expect(bytes, &mut index, b'Z')?;
+    let offset = parse_utc_or_offset_minutes(bytes, &mut index)?;
 
     timestamp.year = year as u16;
     timestamp.month = month as u8;
@@ -119,8 +115,8 @@ fn parse_scalar(str: &str) -> ParseResult<Timestamp> {
     timestamp.hour = hour as u8;
     timestamp.minute = minute as u8;
     timestamp.second = second as u8;
-    timestamp.millisecond = nano / 1000_000;
-    timestamp.offset_second = 0;
+    timestamp.millisecond = nano / 1_000_000;
+    timestamp.offset_minute = offset;
 
     Ok(timestamp)
 }
@@ -148,12 +144,14 @@ fn parse_seconds_and_nanos(bytes: &[u8], mut index: &mut usize) -> ParseResult<(
 }
 
 #[inline(never)]
-fn parse_seconds_and_nanos_slow_path(bytes: &[u8], mut index: &mut usize) -> ParseResult<(u32, u32)> {
-    parse_seconds_and_nanos(bytes, &mut index)
+fn parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes: &[u8], mut index: &mut usize) -> ParseResult<(u32, u32, i32)> {
+    let (seconds, nanos) = parse_seconds_and_nanos(bytes, &mut index)?;
+    let offset_minutes = parse_utc_or_offset_minutes(bytes, &mut index)?;
+    Ok((seconds, nanos, offset_minutes))
 }
 
-
-fn parse_offset(bytes: &[u8], mut index: &mut usize) -> ParseResult<i32> {
+#[inline(always)]
+fn parse_utc_or_offset_minutes(bytes: &[u8], mut index: &mut usize) -> ParseResult<i32> {
     let first = bytes[*index];
     if first == b'Z' {
         *index += 1;
@@ -253,35 +251,17 @@ fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
     }
 }
 
-
+// only public for benchmarks
+#[doc(hidden)]
+#[inline]
 pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
     let ts = parse_simd(input)?;
     Ok(ts_to_epoch_millis(&ts))
 }
 
-const MASK: &[[u8; 16]] = &[
-    [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00],
-    [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
-];
-
+#[inline(always)]
 fn parse_simd(input: &str) -> ParseResult<Timestamp> {
-    //2020-09-09T15:05:45Z"
-    //2020-09-09T15:05:45.123456789Z
+    use std::arch::x86_64::*;
 
     if input.len() < 16 {
         return Err(ParseError::InvalidLen(input.len()));
@@ -297,97 +277,44 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
     let mut timestamp = SimdTimestamp::default();
 
     unsafe {
-        let ts_without_seconds = std::arch::x86_64::_mm_loadu_si128(bytes.as_ptr() as *const __m128i);
-        let min = std::arch::x86_64::_mm_loadu_si128(MIN_BYTES.as_ptr() as *const __m128i);
-        let max = std::arch::x86_64::_mm_loadu_si128(MAX_BYTES.as_ptr() as *const __m128i);
-        let space = std::arch::x86_64::_mm_loadu_si128(SPACE_SEP_BYTES.as_ptr() as *const __m128i);
+        let ts_without_seconds = _mm_loadu_si128(bytes.as_ptr() as *const __m128i);
+        let min = _mm_loadu_si128(MIN_BYTES.as_ptr() as *const __m128i);
+        let max = _mm_loadu_si128(MAX_BYTES.as_ptr() as *const __m128i);
+        let space = _mm_loadu_si128(SPACE_SEP_BYTES.as_ptr() as *const __m128i);
 
-        let gt = std::arch::x86_64::_mm_cmpgt_epi8(ts_without_seconds, min);
-        let lt = std::arch::x86_64::_mm_cmplt_epi8(ts_without_seconds, max);
+        let gt = _mm_cmpgt_epi8(ts_without_seconds, min);
+        let lt = _mm_cmplt_epi8(ts_without_seconds, max);
 
-        let space_sep = std::arch::x86_64::_mm_cmpeq_epi8(ts_without_seconds, space);
-        let mask = std::arch::x86_64::_mm_or_si128(std::arch::x86_64::_mm_and_si128(gt, lt), space_sep);
-        let mask = std::arch::x86_64::_mm_movemask_epi8(mask);
+        let space_sep = _mm_cmpeq_epi8(ts_without_seconds, space);
+        let mask = _mm_or_si128(_mm_and_si128(gt, lt), space_sep);
+        let mask = _mm_movemask_epi8(mask);
 
         if mask != 0xFFFF {
             return Err(ParseError::InvalidChar((!mask).trailing_zeros() as usize));
         }
 
-        let nums = std::arch::x86_64::_mm_sub_epi8(ts_without_seconds, space);
-        let nums = std::arch::x86_64::_mm_shuffle_epi8(nums, std::arch::x86_64::_mm_set_epi8(
+        let nums = _mm_sub_epi8(ts_without_seconds, space);
+        let nums = _mm_shuffle_epi8(nums, _mm_set_epi8(
             -1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0,
         ));
 
-        let hundreds = std::arch::x86_64::_mm_and_si128(nums, std::arch::x86_64::_mm_set1_epi16(0x00FF));
-        let hundreds = std::arch::x86_64::_mm_mullo_epi16(hundreds, std::arch::x86_64::_mm_set1_epi16(10));
+        let hundreds = _mm_and_si128(nums, _mm_set1_epi16(0x00FF));
+        let hundreds = _mm_mullo_epi16(hundreds, _mm_set1_epi16(10));
 
-        let ones = std::arch::x86_64::_mm_srli_epi16(nums, 8);
+        let ones = _mm_srli_epi16(nums, 8);
 
-        let res = std::arch::x86_64::_mm_add_epi16(ones, hundreds);
+        let res = _mm_add_epi16(ones, hundreds);
 
         let timestamp_ptr: *mut SimdTimestamp = &mut timestamp;
-        std::arch::x86_64::_mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
-
-        // :23.567890123+56:89
-        // :23.56789012+45:78
-        // :23.567890+23:56
-        // :23.56789+01:45
-        // :23.567890123Z
-        // :23.5678+01:34
-        // :23.56789012Z
-        // :23.567+90:23
-        // :23.5678901Z
-        // :23.56+89:12
-        // :23.567890Z
-        // :23.56789Z
-        // :23.5678Z
-        // :23+56:89
-        // :23.567Z
-        // :23.56Z
-        // :23.5Z
-        // :23Z
-        /*
-        let remaining_len = input.len().saturating_sub(16);
-        dbg!(remaining_len);
-        let seconds_and_nanos = std::arch::x86_64::_mm_loadu_si128(bytes.as_ptr().offset(16) as *const __m128i);
-        debug_m128(seconds_and_nanos);
-        //let seconds_and_nanos = std::arch::x86_64::_mm_and_si128(seconds_and_nanos, std::arch::x86_64::_mm_loadu_si128(MASK[remaining_len.min(16) as usize].as_ptr() as *const __m128i));
-        //debug_m128(seconds_and_nanos);
-
-        let needle = std::arch::x86_64::_mm_loadl_epi64(":.Z+-\0".as_ptr() as *const _);
-        debug_m128(needle);
-        let cmp = std::arch::x86_64::_mm_cmpistrm(needle, seconds_and_nanos, std::arch::x86_64::_SIDD_CMP_EQUAL_ANY);
-        debug_m128(cmp);
-        let cmp_mask = std::arch::x86_64::_mm_extract_epi32(cmp, 0);
-        dbg!(cmp_mask);
-        let cmp_mask = cmp_mask & ((1 << (remaining_len)) - 1) as i32;
-        dbg!(cmp_mask);
-
-        0.leading_zeros()
-
-        match cmp_mask {
-            0b1001 => {
-                std::arch::x86_64::_mm_extract_epi32(seconds_and_nanos, 0) std::arch::x86_64::_mm_set_epi8(
-                    0, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 2)
-            }
-        };
-
-         */
-
-
+        _mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
     }
 
-    let offset_minutes = 0;
-
-    let (second, milli) = if let Some(tuple) = try_parse_seconds_and_millis_simd(bytes) {
-        tuple
+    let (second, milli, offset_minutes) = if let Some((second, nano)) = try_parse_seconds_and_millis_simd(bytes) {
+        (second, nano, 0)
     } else {
         let mut index = 16;
-        let (second, nano) = parse_seconds_and_nanos_slow_path(bytes, &mut index)?;
-
-        expect(bytes, &mut index, b'Z')?;
-        (second, nano / 1_000_000)
-        // let offset_minutes = parse_offset(bytes, &mut index)?;
+        let (second, nano, offset_minutes) = parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
+        (second, nano / 1_000_000, offset_minutes)
     };
 
     let mut result = Timestamp::default();
@@ -398,11 +325,12 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
     result.minute = timestamp.minute as u8;
     result.second = second as u8;
     result.millisecond = milli;
-    result.offset_second = offset_minutes * 60;
+    result.offset_minute = offset_minutes * 60;
 
     Ok(result)
 }
 
+#[inline(always)]
 fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32)> {
     if input.len() == 24 {
         let min: u64 = unsafe { std::ptr::read_unaligned(b":00.000Z".as_ptr() as *const u64) };
