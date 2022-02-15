@@ -309,8 +309,21 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
         _mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
     }
 
-    let (second, milli, offset_minutes) = if let Some((second, nano)) = try_parse_seconds_and_millis_simd(bytes) {
-        (second, nano, 0)
+    let (second, milli, offset_minutes) = if let Some((second, nano, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
+        let offset = match offset_sign {
+            b'Z' => 0,
+            b'+' | b'-' => {
+                let mut index = 24;
+                let tmp = parse_offset_minutes(bytes, &mut index)? as i32;
+                if offset_sign == b'-' {
+                    -tmp
+                } else {
+                    tmp
+                }
+            }
+            _ => return Err(ParseError::InvalidChar(23))
+        };
+        (second, nano, offset)
     } else {
         let mut index = 16;
         let (second, nano, offset_minutes) = parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
@@ -331,9 +344,9 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
 }
 
 #[inline(always)]
-fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32)> {
-    if input.len() == 24 {
-        let min: u64 = unsafe { std::ptr::read_unaligned(b":00.000Z".as_ptr() as *const u64) };
+fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
+    if input.len() >= 24 {
+        let min: u64 = unsafe { std::ptr::read_unaligned(b":00.000+".as_ptr() as *const u64) };
         let max: u64 = unsafe { std::ptr::read_unaligned(b":99.999Z".as_ptr() as *const u64) };
         let buf = unsafe { std::ptr::read_unaligned(input.as_ptr().add(16) as *const u64) };
 
@@ -346,7 +359,7 @@ fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32)> {
         let second = (buf[1] - b'0') as u32 * 10 + (buf[2] - b'0') as u32;
         let milli = (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
 
-        Some((second, milli))
+        Some((second, milli, buf[7]))
     } else {
         None
     }
@@ -397,7 +410,6 @@ pub mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_with_offset_simd() {
         assert_eq!(Timestamp::new_with_offset_seconds(2020, 9, 19, 11, 40, 20, 123, 2 * 60 * 60),
                    parse_simd("2020-09-19T11:40:20.123+02:00").unwrap());
