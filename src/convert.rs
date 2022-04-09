@@ -79,7 +79,7 @@ pub(crate) fn to_epoch_day(year: i32, month: i32, day: i32) -> i32 {
 /// Convert the number of days since the unix epoch into a (year, month, day) tuple.
 /// See https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java#L281
 #[inline]
-fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
+pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
     let mut zero_day = epoch_days + DAYS_0000_TO_1970;
     // find the march-based year
     zero_day -= 60;  // adjust to 0000-03-01 so leap day is at end of four year cycle

@@ -5,6 +5,7 @@
 
 use crate::format::*;
 use std::fmt::{Display, Debug, Formatter};
+use crate::{from_epoch_day, to_epoch_day};
 
 const OFFSET_BITS: u32 = 12;
 const MILLI_BITS: u32 = 10;
@@ -36,9 +37,12 @@ const _: () = {
 
 
 #[derive(PartialEq, Clone, Copy, Ord, PartialOrd, Eq)]
-pub struct Packedtime(u64);
+#[repr(transparent)]
+pub struct PackedTimestamp {
+    value: u64,
+}
 
-impl Packedtime {
+impl PackedTimestamp {
     #[inline]
     pub fn new_utc(
         year: i32,
@@ -52,6 +56,7 @@ impl Packedtime {
         Self::new(year, month, day, hour, minute, second, milli, 0)
     }
 
+    #[inline]
     pub fn new(
         year: i32,
         month: u32,
@@ -60,7 +65,7 @@ impl Packedtime {
         minute: u32,
         second: u32,
         milli: u32,
-        offset_minutes: u32,
+        offset_minutes: i32,
     ) -> Self {
         let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS | day as u64)
             << HOUR_BITS
@@ -73,47 +78,88 @@ impl Packedtime {
             | milli as u64)
             << OFFSET_BITS)
             | offset_minutes as u64;
-        Self(value)
+        Self { value }
+    }
+
+    #[inline]
+    pub fn from_value(value: u64) -> Self {
+        Self { value }
+    }
+
+    #[inline]
+    pub fn value(&self) -> u64 {
+        self.value
+    }
+
+    #[inline]
+    pub fn from_timestamp_millis(ts: i64) -> Self {
+        const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
+        let epoch_days = (ts / MILLIS_PER_DAY) as i32;
+        let milli_of_day = ts.rem_euclid(MILLIS_PER_DAY) as u32;
+        let millisecond = milli_of_day % 1000;
+        let second_of_day = milli_of_day / 1000;
+        let second = second_of_day % 60;
+        let minute_of_day = second_of_day / 60;
+        let minute = minute_of_day % 60;
+        let hour_of_day = minute_of_day / 60;
+
+        let (year, month, day) = from_epoch_day(epoch_days as i32);
+
+        Self::new_utc(year, month as u32, day as u32, hour_of_day, minute, second, millisecond)
+    }
+
+    #[inline]
+    pub fn to_timestamp_millis(&self) -> i64 {
+        let epoch_day = to_epoch_day(self.year() as i32, self.month() as i32, self.day() as i32) as i64;
+
+        let h = self.hour() as i64;
+        let m = self.minute() as i64;
+        let s = self.second() as i64;
+        let o = self.offset_minutes() as i64;
+        let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s - o*60;
+        let millis = self.millisecond() as i64;
+
+        return seconds * 1000 + millis;
     }
 
     #[inline]
     pub fn year(&self) -> u32 {
-        (self.0 >> (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) as u32
+        (self.value >> (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) as u32
     }
 
     #[inline]
     pub fn month(&self) -> u32 {
-        ((self.0 >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MONTH_BITS) - 1)) as u32
+        ((self.value >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MONTH_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn day(&self) -> u32 {
-        ((self.0 >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << DAY_BITS) - 1)) as u32
+        ((self.value >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << DAY_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn hour(&self) -> u32 {
-        ((self.0 >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << HOUR_BITS) - 1)) as u32
+        ((self.value >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << HOUR_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn minute(&self) -> u32 {
-        ((self.0 >> (SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MINUTE_BITS) - 1)) as u32
+        ((self.value >> (SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MINUTE_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn second(&self) -> u32 {
-        ((self.0 >> (MILLI_BITS + OFFSET_BITS)) & ((1 << SECOND_BITS) - 1)) as u32
+        ((self.value >> (MILLI_BITS + OFFSET_BITS)) & ((1 << SECOND_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn millisecond(&self) -> u32 {
-        ((self.0 >> (OFFSET_BITS)) & ((1 << MILLI_BITS) - 1)) as u32
+        ((self.value >> (OFFSET_BITS)) & ((1 << MILLI_BITS) - 1)) as u32
     }
 
     #[inline]
-    pub fn offset_minutes(&self) -> u32 {
-        (self.0 & ((1 << OFFSET_BITS) - 1)) as u32
+    pub fn offset_minutes(&self) -> i32 {
+        (self.value & ((1 << OFFSET_BITS) - 1)) as i32
     }
 
     #[inline]
@@ -157,13 +203,13 @@ impl Packedtime {
     }
 }
 
-impl Display for Packedtime {
+impl Display for PackedTimestamp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.write_rfc3339_str(f)
     }
 }
 
-impl Debug for Packedtime {
+impl Debug for PackedTimestamp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         #[cfg(not(debug_assertions))] {
             self.write_rfc3339_str(f)
@@ -179,14 +225,14 @@ pub mod tests {
 
     #[test]
     fn test_format() {
-        assert_eq!("2020-12-24T17:30:15.010Z".to_owned(), Packedtime::new_utc(2020, 12, 24, 17, 30, 15, 10).to_rfc3339_string());
-        assert_eq!("2020-09-10T17:30:15.123Z".to_owned(), Packedtime::new_utc(2020, 9, 10, 17, 30, 15, 123).to_rfc3339_string());
+        assert_eq!("2020-12-24T17:30:15.010Z".to_owned(), PackedTimestamp::new_utc(2020, 12, 24, 17, 30, 15, 10).to_rfc3339_string());
+        assert_eq!("2020-09-10T17:30:15.123Z".to_owned(), PackedTimestamp::new_utc(2020, 9, 10, 17, 30, 15, 123).to_rfc3339_string());
     }
 
 
     #[test]
     fn test_packed() {
-        let ts = Packedtime::new_utc(2020, 9, 10, 17, 30, 15, 123);
+        let ts = PackedTimestamp::new_utc(2020, 9, 10, 17, 30, 15, 123);
         assert_eq!(2020, ts.year());
         assert_eq!(9, ts.month());
         assert_eq!(10, ts.day());

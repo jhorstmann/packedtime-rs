@@ -1,3 +1,4 @@
+use std::io::{Cursor, Write};
 use chrono::{Datelike, NaiveDateTime, Timelike};
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use packedtime_rs::format_scalar_to_slice;
@@ -6,6 +7,15 @@ use packedtime_rs::format_simd_mul_to_slice;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+
+#[inline(never)]
+fn bench_write_fmt(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mut [u8]) {
+    let mut cursor = Cursor::new(output);
+    input_parts.iter().copied()
+        .for_each(move |(year, month, day, hour, minute, second, milli)| {
+            cursor.write_fmt(format_args!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", year, month, day, hour, minute, second, milli)).unwrap()
+        });
+}
 
 #[inline(never)]
 fn bench_scalar(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mut [u8]) {
@@ -62,6 +72,11 @@ pub fn bench_format(c: &mut Criterion) {
         .bench_function("format_scalar", |b| {
             b.iter(|| {
                 bench_scalar(&input, &mut output);
+            })
+        })
+        .bench_function("format_write_fmt", |b| {
+            b.iter(|| {
+                bench_write_fmt(&input, &mut output);
             })
         });
 }

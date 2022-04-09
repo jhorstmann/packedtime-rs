@@ -1,35 +1,35 @@
 use std::fmt::Write;
 use std::ops::Range;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use packedtime_rs::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd};
+use packedtime_rs::{PackedTimestamp, parse_to_packed_timestamp_scalar, parse_to_packed_timestamp_simd};
 
-use chrono::NaiveDateTime;
+use chrono::{Datelike, NaiveDateTime, Timelike};
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 #[inline(never)]
-fn bench_parse_scalar(input: &[u8], output: &mut [i64], date_len: usize) {
+fn bench_parse_scalar(input: &[u8], output: &mut [PackedTimestamp], date_len: usize) {
     output.iter_mut().zip(input.chunks(date_len)).for_each(|(output, input)| {
         let s = unsafe { std::str::from_utf8_unchecked(input) };
-        *output = parse_to_epoch_millis_scalar(s).unwrap();
+        *output = parse_to_packed_timestamp_scalar(s).unwrap();
     });
 }
 
 #[inline(never)]
-fn bench_parse_simd(input: &[u8], output: &mut [i64], date_len: usize) {
+fn bench_parse_simd(input: &[u8], output: &mut [PackedTimestamp], date_len: usize) {
     output.iter_mut().zip(input.chunks(date_len)).for_each(|(output, input)| {
         let s = unsafe { std::str::from_utf8_unchecked(input) };
-        *output = parse_to_epoch_millis_simd(s).unwrap();
+        *output = parse_to_packed_timestamp_simd(s).unwrap();
     });
 }
 
 #[inline(never)]
-fn bench_parse_chrono(input: &[u8], output: &mut [i64], date_len: usize) {
+fn bench_parse_chrono(input: &[u8], output: &mut [PackedTimestamp], date_len: usize) {
     output.iter_mut().zip(input.chunks(date_len)).for_each(|(output, input)| {
         let s = unsafe { std::str::from_utf8_unchecked(input) };
         let dt = chrono::DateTime::parse_from_rfc3339(s).unwrap();
-        *output = dt.timestamp_millis();
+        *output = PackedTimestamp::new(dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute(), dt.second(), dt.timestamp_millis() as u32, dt.offset().local_minus_utc() / 60);
     });
 }
 
@@ -60,7 +60,7 @@ pub fn bench_parse(c: &mut Criterion) {
     assert_eq!(input_utc.len(), DATE_LEN_UTC * BATCH_SIZE);
     assert_eq!(input_with_offset.len(), DATE_LEN_WITH_OFFSET * BATCH_SIZE);
 
-    let mut output = vec![0_i64; BATCH_SIZE];
+    let mut output = vec![PackedTimestamp::from_value(0); BATCH_SIZE];
 
     c.benchmark_group("parse_utc")
         .throughput(Throughput::Bytes((input_utc.len() + BATCH_SIZE * std::mem::size_of::<i64>()) as u64))

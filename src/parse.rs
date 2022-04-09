@@ -1,5 +1,6 @@
 use crate::error::*;
 use crate::convert::to_epoch_day;
+use crate::PackedTimestamp;
 
 #[repr(C)]
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -88,6 +89,11 @@ fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
 pub fn parse_to_epoch_millis_scalar(input: &str) -> ParseResult<i64> {
     let ts = parse_scalar(input)?;
     Ok(ts_to_epoch_millis(&ts))
+}
+
+pub fn parse_to_packed_timestamp_scalar(input: &str) -> ParseResult<PackedTimestamp> {
+    let ts = parse_scalar(input)?;
+    Ok(PackedTimestamp::new(ts.year as i32, ts.month as u32, ts.day as u32, ts.hour as u32, ts.minute as u32, ts.second as u32, ts.millisecond as u32, ts.offset_minute))
 }
 
 fn parse_scalar(str: &str) -> ParseResult<Timestamp> {
@@ -259,15 +265,18 @@ pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
     Ok(ts_to_epoch_millis(&ts))
 }
 
+// only public for benchmarks
+#[doc(hidden)]
+#[inline]
+pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestamp> {
+    let ts = parse_simd(input)?;
+    Ok(PackedTimestamp::new(ts.year as i32, ts.month as u32, ts.day as u32, ts.hour as u32, ts.minute as u32, ts.second as u32, ts.millisecond as u32, ts.offset_minute))
+}
+
 #[inline(always)]
-fn parse_simd(input: &str) -> ParseResult<Timestamp> {
+unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimestamp> {
     use std::arch::x86_64::*;
 
-    if input.len() < 16 {
-        return Err(ParseError::InvalidLen(input.len()));
-    }
-
-    let bytes = input.as_bytes();
     const MIN_BYTES: &[u8] = "))))-)0-)0S))9))9))".as_bytes();
     const MAX_BYTES: &[u8] = "@@@@-2@-4@U3@;6@;6@".as_bytes();
     const SPACE_SEP_BYTES: &[u8] = "0000-00-00 00:00:00".as_bytes();
@@ -275,39 +284,50 @@ fn parse_simd(input: &str) -> ParseResult<Timestamp> {
     const REM_MAX_BYTES: &[u8] = ";/@[.;@@@@@@@@@@".as_bytes();
 
     let mut timestamp = SimdTimestamp::default();
+    let ts_without_seconds = _mm_loadu_si128(bytes as *const __m128i);
+    let min = _mm_loadu_si128(MIN_BYTES.as_ptr() as *const __m128i);
+    let max = _mm_loadu_si128(MAX_BYTES.as_ptr() as *const __m128i);
+    let space = _mm_loadu_si128(SPACE_SEP_BYTES.as_ptr() as *const __m128i);
 
-    unsafe {
-        let ts_without_seconds = _mm_loadu_si128(bytes.as_ptr() as *const __m128i);
-        let min = _mm_loadu_si128(MIN_BYTES.as_ptr() as *const __m128i);
-        let max = _mm_loadu_si128(MAX_BYTES.as_ptr() as *const __m128i);
-        let space = _mm_loadu_si128(SPACE_SEP_BYTES.as_ptr() as *const __m128i);
+    let gt = _mm_cmpgt_epi8(ts_without_seconds, min);
+    let lt = _mm_cmplt_epi8(ts_without_seconds, max);
 
-        let gt = _mm_cmpgt_epi8(ts_without_seconds, min);
-        let lt = _mm_cmplt_epi8(ts_without_seconds, max);
+    let space_sep = _mm_cmpeq_epi8(ts_without_seconds, space);
+    let mask = _mm_or_si128(_mm_and_si128(gt, lt), space_sep);
+    let mask = _mm_movemask_epi8(mask);
 
-        let space_sep = _mm_cmpeq_epi8(ts_without_seconds, space);
-        let mask = _mm_or_si128(_mm_and_si128(gt, lt), space_sep);
-        let mask = _mm_movemask_epi8(mask);
-
-        if mask != 0xFFFF {
-            return Err(ParseError::InvalidChar((!mask).trailing_zeros() as usize));
-        }
-
-        let nums = _mm_sub_epi8(ts_without_seconds, space);
-        let nums = _mm_shuffle_epi8(nums, _mm_set_epi8(
-            -1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0,
-        ));
-
-        let hundreds = _mm_and_si128(nums, _mm_set1_epi16(0x00FF));
-        let hundreds = _mm_mullo_epi16(hundreds, _mm_set1_epi16(10));
-
-        let ones = _mm_srli_epi16(nums, 8);
-
-        let res = _mm_add_epi16(ones, hundreds);
-
-        let timestamp_ptr: *mut SimdTimestamp = &mut timestamp;
-        _mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
+    if mask != 0xFFFF {
+        return Err(ParseError::InvalidChar((!mask).trailing_zeros() as usize));
     }
+
+    let nums = _mm_sub_epi8(ts_without_seconds, space);
+    let nums = _mm_shuffle_epi8(nums, _mm_set_epi8(
+        -1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0,
+    ));
+
+    let hundreds = _mm_and_si128(nums, _mm_set1_epi16(0x00FF));
+    let hundreds = _mm_mullo_epi16(hundreds, _mm_set1_epi16(10));
+
+    let ones = _mm_srli_epi16(nums, 8);
+
+    let res = _mm_add_epi16(ones, hundreds);
+
+    let timestamp_ptr: *mut SimdTimestamp = &mut timestamp;
+    _mm_storeu_si128(timestamp_ptr as *mut __m128i, res);
+
+    Ok(timestamp)
+}
+
+#[inline(always)]
+fn parse_simd(input: &str) -> ParseResult<Timestamp> {
+
+    if input.len() < 16 {
+        return Err(ParseError::InvalidLen(input.len()));
+    }
+
+    let bytes = input.as_bytes();
+
+    let timestamp = unsafe { parse_simd_yyyy_mm_dd_hh_mm(bytes.as_ptr())? };
 
     let (second, milli, offset_minutes) = if let Some((second, nano, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
         let offset = match offset_sign {
