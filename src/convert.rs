@@ -109,7 +109,6 @@ pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
     (year_est, month, dom)
 }
 
-
 #[inline]
 pub fn timestamp_millis_to_epoch_days(ts: i64) -> i32 {
     // todo: find a way to get this vectorizable using integer operations or verify it is exact for all timestamps
@@ -125,6 +124,40 @@ pub fn timestamp_float_to_epoch_days(ts: f64) -> i32 {
 pub fn date_trunc_month_epoch_days(epoch_days: i32) -> i32 {
     let (y, m, d) = from_epoch_day(epoch_days);
     to_epoch_day(y, m, 0)
+}
+
+#[inline]
+fn truncate_millis(ts: i64, truncate: i64) -> i64 {
+    ts / truncate * truncate
+}
+
+#[inline]
+fn truncate_millis_float(ts: f64, truncate: i64) -> f64 {
+    let truncate = truncate as f64;
+    (ts / truncate).floor() * truncate
+}
+
+#[inline]
+pub fn date_trunc_day_timestamp_millis(ts: i64) -> i64 {
+    truncate_millis(ts, MILLIS_PER_DAY)
+}
+
+#[inline]
+pub fn date_trunc_day_timestamp_millis_float(ts: f64) -> f64 {
+    truncate_millis_float(ts, MILLIS_PER_DAY)
+}
+
+#[inline]
+pub fn date_trunc_week_timestamp_millis(ts: i64) -> i64 {
+    // unix epoch starts on a thursday
+    let offset = 4 * MILLIS_PER_DAY;
+    truncate_millis(ts - offset, 7 * MILLIS_PER_DAY) + offset
+}
+
+#[inline]
+pub fn date_trunc_week_timestamp_millis_float(ts: f64) -> f64 {
+    let offset = (4 * MILLIS_PER_DAY) as f64;
+    truncate_millis_float(ts - offset, 7 * MILLIS_PER_DAY) + offset
 }
 
 #[inline]
@@ -183,7 +216,6 @@ pub fn date_trunc_quarter_timestamp_millis_float(ts: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-
     #[test]
     fn test_to_epoch_day() {
         assert_eq!(0, super::to_epoch_day(1970, 1, 1));

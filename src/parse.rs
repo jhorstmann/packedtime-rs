@@ -80,8 +80,8 @@ fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
     let h = ts.hour as i64;
     let m = ts.minute as i64;
     let s = ts.second as i64;
-    let os = ts.offset_minute as i64;
-    let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s as i64 - os;
+    let offset_minute = ts.offset_minute as i64;
+    let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s as i64 - offset_minute * 60;
 
     return seconds * 1000 + ts.millisecond as i64;
 }
