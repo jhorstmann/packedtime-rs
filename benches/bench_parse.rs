@@ -53,6 +53,29 @@ fn bench_parse_chrono(input: &[u8], output: &mut [PackedTimestamp], date_len: us
         });
 }
 
+#[inline(never)]
+fn bench_parse_time(input: &[u8], output: &mut [PackedTimestamp], date_len: usize) {
+    output
+        .iter_mut()
+        .zip(input.chunks(date_len))
+        .for_each(|(output, input)| {
+            let s = unsafe { std::str::from_utf8_unchecked(input) };
+            let odt =
+                time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339)
+                    .unwrap();
+            *output = PackedTimestamp::new(
+                odt.year(),
+                u8::from(odt.month()) as _,
+                odt.day() as _,
+                odt.hour() as _,
+                odt.minute() as _,
+                odt.second() as _,
+                odt.millisecond() as _,
+                odt.offset().whole_minutes() as _,
+            );
+        });
+}
+
 pub fn bench_parse(c: &mut Criterion) {
     const DATE_LEN_UTC: usize = 24;
     const DATE_LEN_WITH_OFFSET: usize = 29;
@@ -102,6 +125,9 @@ pub fn bench_parse(c: &mut Criterion) {
         })
         .bench_function("parse_chrono", |b| {
             b.iter(|| bench_parse_chrono(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
+        })
+        .bench_function("parse_time", |b| {
+            b.iter(|| bench_parse_time(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
         });
 
     c.benchmark_group("parse_offset")
@@ -129,6 +155,15 @@ pub fn bench_parse(c: &mut Criterion) {
         .bench_function("parse_chrono", |b| {
             b.iter(|| {
                 bench_parse_chrono(
+                    input_with_offset.as_bytes(),
+                    &mut output,
+                    DATE_LEN_WITH_OFFSET,
+                )
+            })
+        })
+        .bench_function("parse_time", |b| {
+            b.iter(|| {
+                bench_parse_time(
                     input_with_offset.as_bytes(),
                     &mut output,
                     DATE_LEN_WITH_OFFSET,

@@ -26,6 +26,7 @@ debug = 2
 [dev-dependencies]
 criterion = "0.3"
 chrono = "0.4.19"
+time = {version = "0.3.11", features = ["parsing"]}
 rand = "0.8"
 
 [[bench]]
