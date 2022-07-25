@@ -82,7 +82,7 @@ pub(crate) fn to_epoch_day(year: i32, month: i32, day: i32) -> i32 {
 pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
     let mut zero_day = epoch_days + DAYS_0000_TO_1970;
     // find the march-based year
-    zero_day -= 60;  // adjust to 0000-03-01 so leap day is at end of four year cycle
+    zero_day -= 60; // adjust to 0000-03-01 so leap day is at end of four year cycle
     let mut adjust = 0;
     if zero_day < 0 && SUPPORT_NEGATIVE_YEAR {
         // adjust negative years to positive for calculation
@@ -97,7 +97,7 @@ pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
         year_est -= 1;
         doy_est = zero_day - (365 * year_est + year_est / 4 - year_est / 100 + year_est / 400);
     }
-    year_est += adjust;  // reset any negative year
+    year_est += adjust; // reset any negative year
     let march_doy0 = doy_est;
 
     // convert march-based values back to january-based

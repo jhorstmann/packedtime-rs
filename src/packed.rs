@@ -1,11 +1,10 @@
-
 //   MMMMdddddhhhhhmmmmmmssssss
 // MMMMdddddhhhhhmmmmmmssssss00
 // 3210765432107654321076543210
 
 use crate::format::*;
-use std::fmt::{Display, Debug, Formatter};
-use crate::{from_epoch_day, to_epoch_day};
+use crate::{from_epoch_day, parse_simd, to_epoch_day, ParseResult};
+use std::fmt::{Debug, Display, Formatter};
 
 const OFFSET_BITS: u32 = 12;
 const MILLI_BITS: u32 = 10;
@@ -30,11 +29,14 @@ const MIN_OFFSET_HOURS: i32 = -18;
 const MIN_OFFSET_MINUTES: i32 = MIN_OFFSET_HOURS * 60;
 const MAX_OFFSET_MINUTES: i32 = MAX_OFFSET_HOURS * 60;
 
+#[allow(clippy::assertions_on_constants)]
 const _: () = {
     assert!(MIN_YEAR_INTERNAL < MIN_YEAR || MAX_YEAR_INTERNAL > MAX_YEAR);
-    assert!(MIN_OFFSET_MINUTES_INTERNAL < MIN_OFFSET_MINUTES || MAX_OFFSET_MINUTES_INTERNAL > MAX_OFFSET_MINUTES);
+    assert!(
+        MIN_OFFSET_MINUTES_INTERNAL < MIN_OFFSET_MINUTES
+            || MAX_OFFSET_MINUTES_INTERNAL > MAX_OFFSET_MINUTES
+    );
 };
-
 
 #[derive(PartialEq, Clone, Copy, Ord, PartialOrd, Eq)]
 #[repr(transparent)]
@@ -44,6 +46,7 @@ pub struct PackedTimestamp {
 
 impl PackedTimestamp {
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     pub fn new_utc(
         year: i32,
         month: u32,
@@ -57,6 +60,7 @@ impl PackedTimestamp {
     }
 
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         year: i32,
         month: u32,
@@ -67,7 +71,8 @@ impl PackedTimestamp {
         milli: u32,
         offset_minutes: i32,
     ) -> Self {
-        let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS | day as u64)
+        let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS
+            | day as u64)
             << HOUR_BITS
             | hour as u64)
             << MINUTE_BITS
@@ -105,41 +110,78 @@ impl PackedTimestamp {
 
         let (year, month, day) = from_epoch_day(epoch_days as i32);
 
-        Self::new_utc(year, month as u32, day as u32, hour_of_day, minute, second, millisecond)
+        Self::new_utc(
+            year,
+            month as u32,
+            day as u32,
+            hour_of_day,
+            minute,
+            second,
+            millisecond,
+        )
     }
 
     #[inline]
     pub fn to_timestamp_millis(&self) -> i64 {
-        let epoch_day = to_epoch_day(self.year() as i32, self.month() as i32, self.day() as i32) as i64;
+        let epoch_day =
+            to_epoch_day(self.year() as i32, self.month() as i32, self.day() as i32) as i64;
 
         let h = self.hour() as i64;
         let m = self.minute() as i64;
         let s = self.second() as i64;
         let o = self.offset_minutes() as i64;
-        let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s - o*60;
+        let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s - o * 60;
         let millis = self.millisecond() as i64;
 
-        return seconds * 1000 + millis;
+        seconds * 1000 + millis
+    }
+
+    pub fn from_rfc3339_bytes(input: &[u8]) -> ParseResult<Self> {
+        #[cfg(target_feature = "sse4.1")]
+        {
+            let ts = parse_simd(input)?;
+            Ok(ts.to_packed())
+        }
+        #[cfg(not(target_feature = "sse4.1"))]
+        {
+            let ts = parse_scalar(input)?;
+            Ok(ts.to_packed())
+        }
+    }
+
+    pub fn from_rfc3339_str(input: &str) -> ParseResult<Self> {
+        Self::from_rfc3339_bytes(input.as_bytes())
     }
 
     #[inline]
     pub fn year(&self) -> u32 {
-        (self.value >> (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) as u32
+        (self.value
+            >> (MONTH_BITS
+                + DAY_BITS
+                + HOUR_BITS
+                + MINUTE_BITS
+                + SECOND_BITS
+                + MILLI_BITS
+                + OFFSET_BITS)) as u32
     }
 
     #[inline]
     pub fn month(&self) -> u32 {
-        ((self.value >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MONTH_BITS) - 1)) as u32
+        ((self.value
+            >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS))
+            & ((1 << MONTH_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn day(&self) -> u32 {
-        ((self.value >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << DAY_BITS) - 1)) as u32
+        ((self.value >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS))
+            & ((1 << DAY_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn hour(&self) -> u32 {
-        ((self.value >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << HOUR_BITS) - 1)) as u32
+        ((self.value >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS))
+            & ((1 << HOUR_BITS) - 1)) as u32
     }
 
     #[inline]
@@ -171,10 +213,12 @@ impl PackedTimestamp {
     #[inline]
     pub fn write_rfc3339_str<W: std::fmt::Write>(&self, mut writer: W) -> std::fmt::Result {
         let buffer = self.to_rfc3339_bytes();
-        #[cfg(not(debug_assertions))] {
+        #[cfg(not(debug_assertions))]
+        {
             writer.write_str(unsafe { std::str::from_utf8_unchecked(&buffer) })
         }
-        #[cfg(debug_assertions)] {
+        #[cfg(debug_assertions)]
+        {
             writer.write_str(std::str::from_utf8(&buffer).expect("utf8 string"))
         }
     }
@@ -182,11 +226,31 @@ impl PackedTimestamp {
     #[inline]
     pub fn to_rfc3339_bytes(&self) -> [u8; 24] {
         let mut buffer = [0_u8; 24];
-        #[cfg(target_feature = "sse4.1")] unsafe {
-            format_simd_mul_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        #[cfg(target_feature = "sse4.1")]
+        unsafe {
+            format_simd_mul_to_slice(
+                &mut buffer,
+                self.year(),
+                self.month(),
+                self.day(),
+                self.hour(),
+                self.minute(),
+                self.second(),
+                self.millisecond(),
+            );
         }
-        #[cfg(not(target_feature = "sse4.1"))] {
-            format_scalar_to_slice(&mut buffer, self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond());
+        #[cfg(not(target_feature = "sse4.1"))]
+        {
+            format_scalar_to_slice(
+                &mut buffer,
+                self.year(),
+                self.month(),
+                self.day(),
+                self.hour(),
+                self.minute(),
+                self.second(),
+                self.millisecond(),
+            );
         }
         buffer
     }
@@ -194,11 +258,15 @@ impl PackedTimestamp {
     #[inline]
     pub fn to_rfc3339_string(&self) -> String {
         let buffer = self.to_rfc3339_bytes();
-        #[cfg(not(debug_assertions))] {
+        #[cfg(not(debug_assertions))]
+        {
             unsafe { std::str::from_utf8_unchecked(&buffer).to_string() }
         }
-        #[cfg(debug_assertions)] {
-            std::str::from_utf8(&buffer).expect("utf8 string").to_string()
+        #[cfg(debug_assertions)]
+        {
+            std::str::from_utf8(&buffer)
+                .expect("utf8 string")
+                .to_string()
         }
     }
 }
@@ -211,24 +279,41 @@ impl Display for PackedTimestamp {
 
 impl Debug for PackedTimestamp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        #[cfg(not(debug_assertions))] {
+        #[cfg(not(debug_assertions))]
+        {
             self.write_rfc3339_str(f)
         }
-        #[cfg(debug_assertions)] {
-            f.write_fmt(format_args!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z", self.year(), self.month(), self.day(), self.hour(), self.minute(), self.second(), self.millisecond()))
+        #[cfg(debug_assertions)]
+        {
+            f.write_fmt(format_args!(
+                "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+                self.year(),
+                self.month(),
+                self.day(),
+                self.hour(),
+                self.minute(),
+                self.second(),
+                self.millisecond()
+            ))
         }
     }
 }
 
+#[cfg(test)]
 pub mod tests {
-    use super::*;
+    use crate::PackedTimestamp;
 
     #[test]
     fn test_format() {
-        assert_eq!("2020-12-24T17:30:15.010Z".to_owned(), PackedTimestamp::new_utc(2020, 12, 24, 17, 30, 15, 10).to_rfc3339_string());
-        assert_eq!("2020-09-10T17:30:15.123Z".to_owned(), PackedTimestamp::new_utc(2020, 9, 10, 17, 30, 15, 123).to_rfc3339_string());
+        assert_eq!(
+            "2020-12-24T17:30:15.010Z".to_owned(),
+            PackedTimestamp::new_utc(2020, 12, 24, 17, 30, 15, 10).to_rfc3339_string()
+        );
+        assert_eq!(
+            "2020-09-10T17:30:15.123Z".to_owned(),
+            PackedTimestamp::new_utc(2020, 9, 10, 17, 30, 15, 123).to_rfc3339_string()
+        );
     }
-
 
     #[test]
     fn test_packed() {

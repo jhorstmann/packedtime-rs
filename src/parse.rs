@@ -1,5 +1,5 @@
-use crate::error::*;
 use crate::convert::to_epoch_day;
+use crate::error::*;
 use crate::PackedTimestamp;
 
 #[repr(C)]
@@ -15,7 +15,9 @@ struct SimdTimestamp {
     pad2: u16,
 }
 
-const _: () = { assert!(std::mem::size_of::<SimdTimestamp>() == 16); };
+const _: () = {
+    assert!(std::mem::size_of::<SimdTimestamp>() == 16);
+};
 
 impl SimdTimestamp {
     fn new(year: u16, month: u16, day: u16, hour: u16, minute: u16) -> Self {
@@ -33,7 +35,7 @@ impl SimdTimestamp {
 }
 
 #[derive(PartialEq, Clone, Debug, Default)]
-struct Timestamp {
+pub(crate) struct Timestamp {
     year: u16,
     month: u8,
     day: u8,
@@ -45,7 +47,15 @@ struct Timestamp {
 }
 
 impl Timestamp {
-    fn new(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8, millisecond: u32) -> Self {
+    pub(crate) fn new(
+        year: u16,
+        month: u8,
+        day: u8,
+        hour: u8,
+        minute: u8,
+        second: u8,
+        millisecond: u32,
+    ) -> Self {
         Self {
             year,
             month,
@@ -58,7 +68,16 @@ impl Timestamp {
         }
     }
 
-    fn new_with_offset_seconds(year: u16, month: u8, day: u8, hour: u8, minute: u8, second: u8, millisecond: u32, offset_second: i32) -> Self {
+    pub(crate) fn new_with_offset_seconds(
+        year: u16,
+        month: u8,
+        day: u8,
+        hour: u8,
+        minute: u8,
+        second: u8,
+        millisecond: u32,
+        offset_second: i32,
+    ) -> Self {
         Self {
             year,
             month,
@@ -70,8 +89,20 @@ impl Timestamp {
             offset_minute: offset_second,
         }
     }
-}
 
+    pub(crate) fn to_packed(&self) -> PackedTimestamp {
+        PackedTimestamp::new(
+            self.year as _,
+            self.month as _,
+            self.day as _,
+            self.hour as _,
+            self.minute as _,
+            self.second as _,
+            self.millisecond as _,
+            self.offset_minute,
+        )
+    }
+}
 
 #[inline(always)]
 fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
@@ -83,21 +114,31 @@ fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
     let offset_minute = ts.offset_minute as i64;
     let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s as i64 - offset_minute * 60;
 
-    return seconds * 1000 + ts.millisecond as i64;
+    seconds * 1000 + ts.millisecond as i64
 }
 
+#[doc(hidden)]
 pub fn parse_to_epoch_millis_scalar(input: &str) -> ParseResult<i64> {
-    let ts = parse_scalar(input)?;
+    let ts = parse_scalar(input.as_bytes())?;
     Ok(ts_to_epoch_millis(&ts))
 }
 
+#[doc(hidden)]
 pub fn parse_to_packed_timestamp_scalar(input: &str) -> ParseResult<PackedTimestamp> {
-    let ts = parse_scalar(input)?;
-    Ok(PackedTimestamp::new(ts.year as i32, ts.month as u32, ts.day as u32, ts.hour as u32, ts.minute as u32, ts.second as u32, ts.millisecond as u32, ts.offset_minute))
+    let ts = parse_scalar(input.as_bytes())?;
+    Ok(PackedTimestamp::new(
+        ts.year as i32,
+        ts.month as u32,
+        ts.day as u32,
+        ts.hour as u32,
+        ts.minute as u32,
+        ts.second as u32,
+        ts.millisecond as u32,
+        ts.offset_minute,
+    ))
 }
 
-fn parse_scalar(str: &str) -> ParseResult<Timestamp> {
-    let bytes = str.as_bytes();
+pub(crate) fn parse_scalar(bytes: &[u8]) -> ParseResult<Timestamp> {
     let mut timestamp = Timestamp::default();
     let mut index = 0;
 
@@ -128,20 +169,20 @@ fn parse_scalar(str: &str) -> ParseResult<Timestamp> {
 }
 
 #[inline(always)]
-fn parse_seconds_and_nanos(bytes: &[u8], mut index: &mut usize) -> ParseResult<(u32, u32)> {
+fn parse_seconds_and_nanos(bytes: &[u8], index: &mut usize) -> ParseResult<(u32, u32)> {
     let mut second = 0;
     let mut nano = 0;
     if *index < bytes.len() {
         let ch = bytes[*index];
         if ch == b'.' {
             *index += 1;
-            nano = parse_nano(bytes, &mut index)?;
+            nano = parse_nano(bytes, index)?;
         } else if ch == b':' {
             *index += 1;
-            second = parse_num2(bytes, &mut index)?;
+            second = parse_num2(bytes, index)?;
             if *index < bytes.len() && bytes[*index] == b'.' {
                 *index += 1;
-                nano = parse_nano(bytes, &mut index)?;
+                nano = parse_nano(bytes, index)?;
             }
         }
     }
@@ -150,14 +191,17 @@ fn parse_seconds_and_nanos(bytes: &[u8], mut index: &mut usize) -> ParseResult<(
 }
 
 #[inline(never)]
-fn parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes: &[u8], mut index: &mut usize) -> ParseResult<(u32, u32, i32)> {
-    let (seconds, nanos) = parse_seconds_and_nanos(bytes, &mut index)?;
-    let offset_minutes = parse_utc_or_offset_minutes(bytes, &mut index)?;
+fn parse_seconds_and_nanos_and_offset_minutes_slow_path(
+    bytes: &[u8],
+    index: &mut usize,
+) -> ParseResult<(u32, u32, i32)> {
+    let (seconds, nanos) = parse_seconds_and_nanos(bytes, index)?;
+    let offset_minutes = parse_utc_or_offset_minutes(bytes, index)?;
     Ok((seconds, nanos, offset_minutes))
 }
 
 #[inline(always)]
-fn parse_utc_or_offset_minutes(bytes: &[u8], mut index: &mut usize) -> ParseResult<i32> {
+fn parse_utc_or_offset_minutes(bytes: &[u8], index: &mut usize) -> ParseResult<i32> {
     let first = bytes[*index];
     if first == b'Z' {
         *index += 1;
@@ -168,45 +212,55 @@ fn parse_utc_or_offset_minutes(bytes: &[u8], mut index: &mut usize) -> ParseResu
         }
     } else if first == b'+' {
         *index += 1;
-        Ok(parse_offset_minutes(bytes, &mut index)? as i32)
+        Ok(parse_offset_minutes(bytes, index)? as i32)
     } else if first == b'-' {
         *index += 1;
-        Ok(-(parse_offset_minutes(bytes, &mut index)? as i32))
+        Ok(-(parse_offset_minutes(bytes, index)? as i32))
     } else {
         Err(ParseError::InvalidChar(*index))
     }
 }
 
 #[inline(always)]
-fn parse_offset_minutes(bytes: &[u8], mut index: &mut usize) -> ParseResult<u32> {
-    let offset_hour = parse_num2(bytes, &mut index)?;
+fn parse_offset_minutes(bytes: &[u8], index: &mut usize) -> ParseResult<u32> {
+    let offset_hour = parse_num2(bytes, index)?;
     expect(bytes, index, b':')?;
-    let offset_minute = parse_num2(bytes, &mut index)?;
+    let offset_minute = parse_num2(bytes, index)?;
 
     Ok(offset_hour * 60 + offset_minute)
 }
 
 #[inline(always)]
-fn parse_num2(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
-    let d1 = digit(bytes, &mut i)?;
-    let d2 = digit(bytes, &mut i)?;
+fn parse_num2(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
+    let d1 = digit(bytes, i)?;
+    let d2 = digit(bytes, i)?;
     Ok(d1 * 10 + d2)
 }
 
 #[inline(always)]
-fn parse_num4(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
-    let d1 = digit(bytes, &mut i)?;
-    let d2 = digit(bytes, &mut i)?;
-    let d3 = digit(bytes, &mut i)?;
-    let d4 = digit(bytes, &mut i)?;
+fn parse_num4(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
+    let d1 = digit(bytes, i)?;
+    let d2 = digit(bytes, i)?;
+    let d3 = digit(bytes, i)?;
+    let d4 = digit(bytes, i)?;
     Ok(d1 * 1000 + d2 * 100 + d3 * 10 + d4)
 }
 
-const NANO_MULTIPLIER: [u32; 9] = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000];
+const NANO_MULTIPLIER: [u32; 9] = [
+    1,
+    10,
+    100,
+    1_000,
+    10_000,
+    100_000,
+    1_000_000,
+    10_000_000,
+    100_000_000,
+];
 
 #[inline(always)]
-fn parse_nano(bytes: &[u8], mut i: &mut usize) -> ParseResult<u32> {
-    let mut r = digit(bytes, &mut i)?;
+fn parse_nano(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
+    let mut r = digit(bytes, i)?;
     let mut j = 1;
 
     while *i < bytes.len() && j < 9 {
@@ -245,7 +299,6 @@ fn expect2(bytes: &[u8], i: &mut usize, expected1: u8, expected2: u8) -> ParseRe
     }
 }
 
-
 #[inline(always)]
 fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
     let ch = bytes[*i];
@@ -261,7 +314,7 @@ fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
 #[doc(hidden)]
 #[inline]
 pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
-    let ts = parse_simd(input)?;
+    let ts = parse_simd(input.as_bytes())?;
     Ok(ts_to_epoch_millis(&ts))
 }
 
@@ -269,8 +322,17 @@ pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
 #[doc(hidden)]
 #[inline]
 pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestamp> {
-    let ts = parse_simd(input)?;
-    Ok(PackedTimestamp::new(ts.year as i32, ts.month as u32, ts.day as u32, ts.hour as u32, ts.minute as u32, ts.second as u32, ts.millisecond as u32, ts.offset_minute))
+    let ts = parse_simd(input.as_bytes())?;
+    Ok(PackedTimestamp::new(
+        ts.year as i32,
+        ts.month as u32,
+        ts.day as u32,
+        ts.hour as u32,
+        ts.minute as u32,
+        ts.second as u32,
+        ts.millisecond as u32,
+        ts.offset_minute,
+    ))
 }
 
 #[inline(always)]
@@ -301,9 +363,10 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
     }
 
     let nums = _mm_sub_epi8(ts_without_seconds, space);
-    let nums = _mm_shuffle_epi8(nums, _mm_set_epi8(
-        -1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0,
-    ));
+    let nums = _mm_shuffle_epi8(
+        nums,
+        _mm_set_epi8(-1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0),
+    );
 
     let hundreds = _mm_and_si128(nums, _mm_set1_epi16(0x00FF));
     let hundreds = _mm_mullo_epi16(hundreds, _mm_set1_epi16(10));
@@ -319,48 +382,46 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
 }
 
 #[inline(always)]
-fn parse_simd(input: &str) -> ParseResult<Timestamp> {
-
-    if input.len() < 16 {
-        return Err(ParseError::InvalidLen(input.len()));
+pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
+    if bytes.len() < 16 {
+        return Err(ParseError::InvalidLen(bytes.len()));
     }
-
-    let bytes = input.as_bytes();
 
     let timestamp = unsafe { parse_simd_yyyy_mm_dd_hh_mm(bytes.as_ptr())? };
 
-    let (second, milli, offset_minutes) = if let Some((second, nano, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
-        let offset = match offset_sign {
-            b'Z' => 0,
-            b'+' | b'-' => {
-                let mut index = 24;
-                let tmp = parse_offset_minutes(bytes, &mut index)? as i32;
-                if offset_sign == b'-' {
-                    -tmp
-                } else {
-                    tmp
+    let (second, milli, offset_minutes) =
+        if let Some((second, nano, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
+            let offset = match offset_sign {
+                b'Z' => 0,
+                b'+' | b'-' => {
+                    let mut index = 24;
+                    let tmp = parse_offset_minutes(bytes, &mut index)? as i32;
+                    if offset_sign == b'-' {
+                        -tmp
+                    } else {
+                        tmp
+                    }
                 }
-            }
-            _ => return Err(ParseError::InvalidChar(23))
+                _ => return Err(ParseError::InvalidChar(23)),
+            };
+            (second, nano, offset)
+        } else {
+            let mut index = 16;
+            let (second, nano, offset_minutes) =
+                parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
+            (second, nano / 1_000_000, offset_minutes)
         };
-        (second, nano, offset)
-    } else {
-        let mut index = 16;
-        let (second, nano, offset_minutes) = parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
-        (second, nano / 1_000_000, offset_minutes)
-    };
 
-    let mut result = Timestamp::default();
-    result.year = timestamp.year_hi * 100 + timestamp.year_lo;
-    result.month = timestamp.month as u8;
-    result.day = timestamp.day as u8;
-    result.hour = timestamp.hour as u8;
-    result.minute = timestamp.minute as u8;
-    result.second = second as u8;
-    result.millisecond = milli;
-    result.offset_minute = offset_minutes * 60;
-
-    Ok(result)
+    Ok(Timestamp {
+        year: timestamp.year_hi * 100 + timestamp.year_lo,
+        month: timestamp.month as u8,
+        day: timestamp.day as u8,
+        hour: timestamp.hour as u8,
+        minute: timestamp.minute as u8,
+        second: second as u8,
+        millisecond: milli,
+        offset_minute: offset_minutes * 60,
+    })
 }
 
 #[inline(always)]
@@ -371,13 +432,14 @@ fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
         let buf = unsafe { std::ptr::read_unaligned(input.as_ptr().add(16) as *const u64) };
 
         if buf < min || buf > max {
-            return None
+            return None;
         }
 
-        let buf = unsafe { std::mem::transmute::<u64, [u8; 8]>(buf) };
+        let buf = buf.to_le_bytes();
 
         let second = (buf[1] - b'0') as u32 * 10 + (buf[2] - b'0') as u32;
-        let milli = (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
+        let milli =
+            (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
 
         Some((second, milli, buf[7]))
     } else {
@@ -385,60 +447,101 @@ fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
     }
 }
 
+pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
+    #[cfg(target_feature = "sse4.1")]
+    {
+        let ts = parse_simd(bytes)?;
+        Ok(ts_to_epoch_millis(&ts))
+    }
+    #[cfg(not(target_feature = "sse4.1"))]
+    {
+        let ts = parse_scalar(bytes)?;
+        Ok(ts_to_epoch_millis(&ts))
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
-    use crate::parse::{parse_simd, parse_scalar, Timestamp};
     use crate::error::ParseError;
+    use crate::parse::{parse_scalar, parse_simd, Timestamp};
     use crate::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd};
 
     #[test]
     fn test_valid() {
-        assert!(parse_simd("1970-01-01T00:00Z").is_ok());
-        assert!(parse_simd("1970-01-01T00:00:00Z").is_ok());
-        assert!(parse_simd("1970-01-01T00:00:00.000Z").is_ok());
+        assert!(parse_simd(b"1970-01-01T00:00Z").is_ok());
+        assert!(parse_simd(b"1970-01-01T00:00:00Z").is_ok());
+        assert!(parse_simd(b"1970-01-01T00:00:00.000Z").is_ok());
 
-        assert!(parse_simd("1970-01-01 00:00Z").is_ok());
-        assert!(parse_simd("1970-01-01 00:00:00Z").is_ok());
-        assert!(parse_simd("1970-01-01 00:00:00.000Z").is_ok());
+        assert!(parse_simd(b"1970-01-01 00:00Z").is_ok());
+        assert!(parse_simd(b"1970-01-01 00:00:00Z").is_ok());
+        assert!(parse_simd(b"1970-01-01 00:00:00.000Z").is_ok());
     }
 
     #[test]
     fn test_invalid_len() {
-        assert_eq!(Err(ParseError::InvalidLen(0)), parse_simd(""));
-        assert_eq!(Err(ParseError::InvalidLen(1)), parse_simd("X"));
-        assert_eq!(Err(ParseError::InvalidLen(4)), parse_simd("2020"));
+        assert_eq!(Err(ParseError::InvalidLen(0)), parse_simd(b""));
+        assert_eq!(Err(ParseError::InvalidLen(1)), parse_simd(b"X"));
+        assert_eq!(Err(ParseError::InvalidLen(4)), parse_simd(b"2020"));
     }
 
     #[test]
     fn test_invalid_char() {
-        assert_eq!(Err(ParseError::InvalidChar(0)), parse_simd("X020-09-10T12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(1)), parse_simd("2X20-09-10T12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(2)), parse_simd("20X0-09-10T12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(10)), parse_simd("2020-09-10X12:00:00Z"));
-        assert_eq!(Err(ParseError::InvalidChar(10)), parse_simd("2020-09-10X12:00/"));
-        assert_eq!(Err(ParseError::InvalidChar(15)), parse_simd("2020-09-10T12:0X/"));
+        assert_eq!(
+            Err(ParseError::InvalidChar(0)),
+            parse_simd(b"X020-09-10T12:00:00Z")
+        );
+        assert_eq!(
+            Err(ParseError::InvalidChar(1)),
+            parse_simd(b"2X20-09-10T12:00:00Z")
+        );
+        assert_eq!(
+            Err(ParseError::InvalidChar(2)),
+            parse_simd(b"20X0-09-10T12:00:00Z")
+        );
+        assert_eq!(
+            Err(ParseError::InvalidChar(10)),
+            parse_simd(b"2020-09-10X12:00:00Z")
+        );
+        assert_eq!(
+            Err(ParseError::InvalidChar(10)),
+            parse_simd(b"2020-09-10X12:00/")
+        );
+        assert_eq!(
+            Err(ParseError::InvalidChar(15)),
+            parse_simd(b"2020-09-10T12:0X/")
+        );
     }
 
     #[test]
     fn test_parse_scalar() {
-        assert_eq!(Timestamp::new(2345, 12, 24, 17, 30, 15, 123), parse_scalar("2345-12-24T17:30:15.123Z").unwrap());
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_scalar(b"2345-12-24T17:30:15.123Z").unwrap()
+        );
     }
 
     #[test]
     fn test_parse_simd() {
-        assert_eq!(Timestamp::new(2345, 12, 24, 17, 30, 15, 123), parse_simd("2345-12-24T17:30:15.123Z").unwrap());
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.123Z").unwrap()
+        );
     }
 
     #[test]
     fn test_parse_with_offset_simd() {
-        assert_eq!(Timestamp::new_with_offset_seconds(2020, 9, 19, 11, 40, 20, 123, 2 * 60 * 60),
-                   parse_simd("2020-09-19T11:40:20.123+02:00").unwrap());
+        assert_eq!(
+            Timestamp::new_with_offset_seconds(2020, 9, 19, 11, 40, 20, 123, 2 * 60 * 60),
+            parse_simd(b"2020-09-19T11:40:20.123+02:00").unwrap()
+        );
     }
 
     #[test]
     fn test_parse_millis_scalar() {
         let input = "2020-09-18T23:30:15Z";
-        let expected = chrono::DateTime::parse_from_rfc3339(input).unwrap().timestamp_millis();
+        let expected = chrono::DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .timestamp_millis();
         let actual = parse_to_epoch_millis_scalar(input).unwrap();
         assert_eq!(expected, actual);
     }
@@ -446,7 +549,9 @@ pub mod tests {
     #[test]
     fn test_parse_millis_simd() {
         let input = "2020-09-18T23:30:15Z";
-        let expected = chrono::DateTime::parse_from_rfc3339(input).unwrap().timestamp_millis();
+        let expected = chrono::DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .timestamp_millis();
         let actual = parse_to_epoch_millis_simd(input).unwrap();
         assert_eq!(expected, actual);
     }
@@ -455,7 +560,9 @@ pub mod tests {
     fn test_parse_millis_simd_masked() {
         let input = "2020-09-18T23:30:15Z--::ZZ";
         let input = unsafe { input.get_unchecked(0..20) };
-        let expected = chrono::DateTime::parse_from_rfc3339(input).unwrap().timestamp_millis();
+        let expected = chrono::DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .timestamp_millis();
         let actual = parse_to_epoch_millis_simd(input).unwrap();
         assert_eq!(expected, actual);
     }
