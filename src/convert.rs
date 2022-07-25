@@ -113,7 +113,7 @@ pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
 #[inline]
 pub fn timestamp_millis_to_epoch_days(ts: i64) -> i32 {
     // todo: find a way to get this vectorizable using integer operations or verify it is exact for all timestamps
-    (ts / MILLIS_PER_DAY) as i32
+    timestamp_float_to_epoch_days(ts as f64)
 }
 
 #[inline]
