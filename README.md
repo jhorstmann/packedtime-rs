@@ -9,7 +9,7 @@
  - SIMD optimized parsing and formatting functions using [rfc 3339 format](https://datatracker.ietf.org/doc/html/rfc3339).
    In microbenchmarks these functions are ~20x faster than using [chrono][chrono]
  - Optimized functions for truncating timestamps to year, month, quarter, week or day precision.
-   In microbenchmarks these are 2x-3x faster than using [chrono][chrono]
+   When used in compute kernels with arrays as input and output these functions are 2x-3x faster compared to [chrono][chrono].
 
 
 

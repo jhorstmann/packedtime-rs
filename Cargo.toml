@@ -3,7 +3,7 @@ name = "packedtime-rs"
 description = "Utilities for efficiently storing, parsing, formatting and truncating timestamps"
 authors = ["Jörn Horstmann <git@jhorstmann.net>"]
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 repository = "https://github.com/jhorstmann/packedtime-rs"
 # contains date conversion code ported from
