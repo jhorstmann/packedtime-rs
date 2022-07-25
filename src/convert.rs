@@ -44,7 +44,7 @@ const SUPPORT_NEGATIVE_YEAR: bool = false;
 /// branchless calculation of whether the given year is a leap year
 #[inline]
 fn is_leap_year(year: i32) -> bool {
-    ((year % 4) == 0) & (((year % 100) != 0) | ((year % 400) == 0))
+    ((year % 4) == 0) & ((year % 100) != 0) | ((year % 400) == 0)
 }
 
 /// Convert a date to the number of days since the unix epoch 1970-01-01.
@@ -78,6 +78,7 @@ pub(crate) fn to_epoch_day(year: i32, month: i32, day: i32) -> i32 {
 
 /// Convert the number of days since the unix epoch into a (year, month, day) tuple.
 /// See https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java#L281
+/// The resulting month and day values are 1-based.
 #[inline]
 pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
     let mut zero_day = epoch_days + DAYS_0000_TO_1970;
@@ -112,7 +113,7 @@ pub(crate) fn from_epoch_day(epoch_days: i32) -> (i32, i32, i32) {
 #[inline]
 pub fn timestamp_millis_to_epoch_days(ts: i64) -> i32 {
     // todo: find a way to get this vectorizable using integer operations or verify it is exact for all timestamps
-    timestamp_float_to_epoch_days(ts as f64)
+    (ts / MILLIS_PER_DAY) as i32
 }
 
 #[inline]
@@ -123,7 +124,7 @@ pub fn timestamp_float_to_epoch_days(ts: f64) -> i32 {
 #[inline]
 pub fn date_trunc_month_epoch_days(epoch_days: i32) -> i32 {
     let (y, m, d) = from_epoch_day(epoch_days);
-    to_epoch_day(y, m, 0)
+    to_epoch_day(y, m, 1)
 }
 
 #[inline]
@@ -177,7 +178,7 @@ pub fn date_trunc_month_timestamp_millis_float(ts: f64) -> f64 {
 #[inline]
 pub fn date_trunc_year_epoch_days(epoch_days: i32) -> i32 {
     let (y, m, d) = from_epoch_day(epoch_days);
-    to_epoch_day(y, 0, 0)
+    to_epoch_day(y, 1, 1)
 }
 
 #[inline]
@@ -197,7 +198,7 @@ pub fn date_trunc_year_timestamp_millis_float(ts: f64) -> f64 {
 #[inline]
 pub fn date_trunc_quarter_epoch_days(epoch_days: i32) -> i32 {
     let (y, m, d) = from_epoch_day(epoch_days);
-    to_epoch_day(y, m / 4, 0)
+    to_epoch_day(y, (m - 1) / 3 * 3 + 1, 1)
 }
 
 #[inline]
@@ -219,6 +220,53 @@ mod tests {
     #[test]
     fn test_to_epoch_day() {
         assert_eq!(0, super::to_epoch_day(1970, 1, 1));
+        assert_eq!(1, super::to_epoch_day(1970, 1, 2));
+        assert_eq!(365, super::to_epoch_day(1971, 1, 1));
+        assert_eq!(365 * 2, super::to_epoch_day(1972, 1, 1));
+        assert_eq!(365 * 2 + 366, super::to_epoch_day(1973, 1, 1));
+
         assert_eq!(18998, super::to_epoch_day(2022, 1, 6));
+        assert_eq!(19198, super::to_epoch_day(2022, 7, 25));
+    }
+
+    #[test]
+    fn test_date_trunc_year_epoch_days() {
+        assert_eq!(18993, super::date_trunc_year_epoch_days(19198));
+    }
+
+    #[test]
+    fn test_date_trunc_year_millis() {
+        assert_eq!(
+            1640995200_000,
+            super::date_trunc_year_timestamp_millis(1640995200_000)
+        );
+        assert_eq!(
+            1640995200_000,
+            super::date_trunc_year_timestamp_millis(1658765238_000)
+        );
+    }
+
+    #[test]
+    fn test_date_trunc_quarter_millis() {
+        assert_eq!(
+            1640995200_000,
+            super::date_trunc_quarter_timestamp_millis(1640995200_000)
+        );
+        assert_eq!(
+            1656633600_000,
+            super::date_trunc_quarter_timestamp_millis(1658766592_000)
+        );
+    }
+
+    #[test]
+    fn test_date_trunc_month_millis() {
+        assert_eq!(
+            1640995200_000,
+            super::date_trunc_month_timestamp_millis(1640995200_000)
+        );
+        assert_eq!(
+            1656633600_000,
+            super::date_trunc_month_timestamp_millis(1658765238_000)
+        );
     }
 }
