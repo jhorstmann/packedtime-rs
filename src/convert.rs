@@ -118,7 +118,8 @@ pub fn timestamp_millis_to_epoch_days(ts: i64) -> i32 {
 
 #[inline]
 pub fn timestamp_float_to_epoch_days(ts: f64) -> i32 {
-    unsafe { (ts * (1.0 / MILLIS_PER_DAY as f64)).to_int_unchecked() }
+    let epoch_days = (ts * (1.0 / MILLIS_PER_DAY as f64)).floor();
+    unsafe { epoch_days.to_int_unchecked() }
 }
 
 #[inline]
@@ -217,6 +218,32 @@ pub fn date_trunc_quarter_timestamp_millis_float(ts: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    use crate::{date_trunc_month_timestamp_millis, date_trunc_year_timestamp_millis};
+    use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
+    use std::ops::Add;
+
+    fn timestamp_to_naive_date_time(ts: i64) -> NaiveDateTime {
+        NaiveDateTime::from_timestamp(ts / 1000, 0).add(chrono::Duration::milliseconds(ts % 1000))
+    }
+
+    fn date_trunc_year_chrono(ts: i64) -> i64 {
+        let ndt = timestamp_to_naive_date_time(ts);
+        let truncated = NaiveDateTime::new(
+            NaiveDate::from_ymd(ndt.year(), 1, 1),
+            NaiveTime::from_hms(0, 0, 0),
+        );
+        truncated.timestamp_millis()
+    }
+
+    fn date_trunc_month_chrono(ts: i64) -> i64 {
+        let ndt = timestamp_to_naive_date_time(ts);
+        let truncated = NaiveDateTime::new(
+            NaiveDate::from_ymd(ndt.year(), ndt.month(), 1),
+            NaiveTime::from_hms(0, 0, 0),
+        );
+        truncated.timestamp_millis()
+    }
+
     #[test]
     fn test_to_epoch_day() {
         assert_eq!(0, super::to_epoch_day(1970, 1, 1));
@@ -268,5 +295,67 @@ mod tests {
             1656633600_000,
             super::date_trunc_month_timestamp_millis(1658765238_000)
         );
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    #[cfg_attr(not(feature = "expensive_tests"), ignore)]
+    fn test_date_trunc_year_exhaustive() {
+        let start = chrono::NaiveDate::from_ymd(1700, 1, 1)
+            .and_hms(0, 0, 0)
+            .timestamp_millis();
+        let end = chrono::NaiveDate::from_ymd(2500, 1, 1)
+            .and_hms(0, 0, 0)
+            .timestamp_millis();
+
+        for ts in (start..end).step_by(60_000) {
+            let trunc_chrono = date_trunc_year_chrono(ts);
+            let trunc_packed = date_trunc_year_timestamp_millis(ts);
+            assert_eq!(
+                trunc_chrono, trunc_packed,
+                "{} != {} for {}",
+                trunc_chrono, trunc_packed, ts
+            );
+
+            let ts = ts + 59_999;
+            let trunc_chrono = date_trunc_year_chrono(ts);
+            let trunc_packed = date_trunc_year_timestamp_millis(ts);
+            assert_eq!(
+                trunc_chrono, trunc_packed,
+                "{} != {} for {}",
+                trunc_chrono, trunc_packed, ts
+            );
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    #[cfg_attr(not(feature = "expensive_tests"), ignore)]
+    fn test_date_trunc_month_exhaustive() {
+        let start = chrono::NaiveDate::from_ymd(1700, 1, 1)
+            .and_hms(0, 0, 0)
+            .timestamp_millis();
+        let end = chrono::NaiveDate::from_ymd(2500, 1, 1)
+            .and_hms(0, 0, 0)
+            .timestamp_millis();
+
+        for ts in (start..end).step_by(60_000) {
+            let trunc_chrono = date_trunc_month_chrono(ts);
+            let trunc_packed = date_trunc_month_timestamp_millis(ts);
+            assert_eq!(
+                trunc_packed, trunc_chrono,
+                "{} != {} for {}",
+                trunc_packed, trunc_chrono, ts
+            );
+
+            let ts = ts + 59_999;
+            let trunc_chrono = date_trunc_month_chrono(ts);
+            let trunc_packed = date_trunc_month_timestamp_millis(ts);
+            assert_eq!(
+                trunc_chrono, trunc_packed,
+                "{} != {} for {}",
+                trunc_chrono, trunc_packed, ts
+            );
+        }
     }
 }
