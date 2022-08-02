@@ -45,3 +45,7 @@ harness = false
 [[bench]]
 name = "bench_date_trunc"
 harness = false
+
+[[bench]]
+name = "bench_date_add"
+harness = false

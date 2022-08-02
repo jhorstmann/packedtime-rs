@@ -128,6 +128,23 @@ pub fn date_trunc_month_epoch_days(epoch_days: i32) -> i32 {
     to_epoch_day(y, m, 1)
 }
 
+static DAYS_PER_MONTH: [[i32; 12]; 2] = [
+    [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
+    [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
+];
+
+#[inline]
+pub fn date_add_month_epoch_days(epoch_days: i32, months: i32) -> i32 {
+    let (mut y, mut m, mut d) = from_epoch_day(epoch_days);
+    let mut m0 = m - 1;
+    m0 += months;
+    y += m0.div_euclid(12);
+    m0 = m0.rem_euclid(12);
+    d = d.min(DAYS_PER_MONTH[is_leap_year(y) as usize][m0 as usize]);
+    m = m0 + 1;
+    to_epoch_day(y, m, d)
+}
+
 #[inline]
 fn truncate_millis(ts: i64, truncate: i64) -> i64 {
     ts / truncate * truncate
@@ -216,9 +233,19 @@ pub fn date_trunc_quarter_timestamp_millis_float(ts: f64) -> f64 {
     truncated * (MILLIS_PER_DAY as f64)
 }
 
+#[inline]
+pub fn date_add_month_timestamp_millis(ts: i64, months: i32) -> i64 {
+    let epoch_days = timestamp_millis_to_epoch_days(ts);
+    let new_epoch_days = date_add_month_epoch_days(epoch_days, months) as i64;
+    new_epoch_days * MILLIS_PER_DAY
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{date_trunc_month_timestamp_millis, date_trunc_year_timestamp_millis};
+    use crate::{
+        date_add_month_epoch_days, date_trunc_month_timestamp_millis,
+        date_trunc_year_timestamp_millis, to_epoch_day,
+    };
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
     use std::ops::Add;
 
@@ -294,6 +321,107 @@ mod tests {
         assert_eq!(
             1656633600_000,
             super::date_trunc_month_timestamp_millis(1658765238_000)
+        );
+    }
+
+    #[test]
+    fn test_date_add_months() {
+        let epoch_day = to_epoch_day(2022, 7, 31);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 1),
+            to_epoch_day(2022, 8, 31)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 2),
+            to_epoch_day(2022, 9, 30)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 3),
+            to_epoch_day(2022, 10, 31)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 4),
+            to_epoch_day(2022, 11, 30)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 5),
+            to_epoch_day(2022, 12, 31)
+        );
+    }
+
+    #[test]
+    fn test_date_add_months_year_boundary() {
+        let epoch_day = to_epoch_day(2022, 7, 31);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 6),
+            to_epoch_day(2023, 1, 31)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 7),
+            to_epoch_day(2023, 2, 28)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 8),
+            to_epoch_day(2023, 3, 31)
+        );
+    }
+
+    #[test]
+    fn test_date_add_months_leap_year() {
+        let epoch_day = to_epoch_day(2022, 7, 31);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 19),
+            to_epoch_day(2024, 2, 29)
+        );
+
+        let epoch_day = to_epoch_day(2022, 2, 28);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 24),
+            to_epoch_day(2024, 2, 28)
+        );
+
+        let epoch_day = to_epoch_day(2024, 2, 29);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, 12),
+            to_epoch_day(2025, 2, 28)
+        );
+    }
+
+    #[test]
+    fn test_date_add_months_negative() {
+        let epoch_day = to_epoch_day(2022, 7, 31);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -1),
+            to_epoch_day(2022, 6, 30)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -2),
+            to_epoch_day(2022, 5, 31)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -3),
+            to_epoch_day(2022, 4, 30)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -4),
+            to_epoch_day(2022, 3, 31)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -5),
+            to_epoch_day(2022, 2, 28)
+        );
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -6),
+            to_epoch_day(2022, 1, 31)
+        );
+    }
+
+    #[test]
+    fn test_date_add_months_negative_year_boundary() {
+        let epoch_day = to_epoch_day(2022, 7, 31);
+        assert_eq!(
+            date_add_month_epoch_days(epoch_day, -7),
+            to_epoch_day(2021, 12, 31)
         );
     }
 
