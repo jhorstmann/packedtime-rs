@@ -31,6 +31,7 @@ expensive_tests = []
 [dev-dependencies]
 criterion = "0.3"
 chrono = "0.4.19"
+chronoutil = "0.2.3"
 time = {version = "0.3.11", features = ["parsing"]}
 rand = "0.8"
 

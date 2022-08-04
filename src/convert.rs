@@ -128,19 +128,29 @@ pub fn date_trunc_month_epoch_days(epoch_days: i32) -> i32 {
     to_epoch_day(y, m, 1)
 }
 
+// stored as i32 instead of smaller types in order to access via vectorized gather instructions
 static DAYS_PER_MONTH: [[i32; 12]; 2] = [
     [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
     [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
 ];
 
+/// Adds the given number of `months` to `epoch_days`.
+/// If the day would be out of range for the resulting month and the `CLAMP_DAYS` flag is set
+/// then the date will be clamped to the end of the month.
+///
+/// For example: 2022-01-31 + 1month => 2022-02-28
+///
+/// Setting `CLAMP_DAYS` to false might improve performance if the date is guaranteed to fall on a valid day.
 #[inline]
-pub fn date_add_month_epoch_days(epoch_days: i32, months: i32) -> i32 {
+pub fn date_add_month_epoch_days<const CLAMP_DAYS: bool>(epoch_days: i32, months: i32) -> i32 {
     let (mut y, mut m, mut d) = from_epoch_day(epoch_days);
     let mut m0 = m - 1;
     m0 += months;
     y += m0.div_euclid(12);
     m0 = m0.rem_euclid(12);
-    d = d.min(DAYS_PER_MONTH[is_leap_year(y) as usize][m0 as usize]);
+    if CLAMP_DAYS {
+        d = d.min(DAYS_PER_MONTH[is_leap_year(y) as usize][m0 as usize] as _);
+    }
     m = m0 + 1;
     to_epoch_day(y, m, d)
 }
@@ -236,7 +246,14 @@ pub fn date_trunc_quarter_timestamp_millis_float(ts: f64) -> f64 {
 #[inline]
 pub fn date_add_month_timestamp_millis(ts: i64, months: i32) -> i64 {
     let epoch_days = timestamp_millis_to_epoch_days(ts);
-    let new_epoch_days = date_add_month_epoch_days(epoch_days, months) as i64;
+    let new_epoch_days = date_add_month_epoch_days::<true>(epoch_days, months) as i64;
+    new_epoch_days * MILLIS_PER_DAY
+}
+
+#[inline]
+pub fn date_add_month_timestamp_millis_unclamped(ts: i64, months: i32) -> i64 {
+    let epoch_days = timestamp_millis_to_epoch_days(ts);
+    let new_epoch_days = date_add_month_epoch_days::<false>(epoch_days, months) as i64;
     new_epoch_days * MILLIS_PER_DAY
 }
 
