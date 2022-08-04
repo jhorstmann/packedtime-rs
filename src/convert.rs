@@ -345,23 +345,23 @@ mod tests {
     fn test_date_add_months() {
         let epoch_day = to_epoch_day(2022, 7, 31);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 1),
+            date_add_month_epoch_days::<true>(epoch_day, 1),
             to_epoch_day(2022, 8, 31)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 2),
+            date_add_month_epoch_days::<true>(epoch_day, 2),
             to_epoch_day(2022, 9, 30)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 3),
+            date_add_month_epoch_days::<true>(epoch_day, 3),
             to_epoch_day(2022, 10, 31)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 4),
+            date_add_month_epoch_days::<true>(epoch_day, 4),
             to_epoch_day(2022, 11, 30)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 5),
+            date_add_month_epoch_days::<true>(epoch_day, 5),
             to_epoch_day(2022, 12, 31)
         );
     }
@@ -370,15 +370,15 @@ mod tests {
     fn test_date_add_months_year_boundary() {
         let epoch_day = to_epoch_day(2022, 7, 31);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 6),
+            date_add_month_epoch_days::<true>(epoch_day, 6),
             to_epoch_day(2023, 1, 31)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 7),
+            date_add_month_epoch_days::<true>(epoch_day, 7),
             to_epoch_day(2023, 2, 28)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 8),
+            date_add_month_epoch_days::<true>(epoch_day, 8),
             to_epoch_day(2023, 3, 31)
         );
     }
@@ -387,19 +387,19 @@ mod tests {
     fn test_date_add_months_leap_year() {
         let epoch_day = to_epoch_day(2022, 7, 31);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 19),
+            date_add_month_epoch_days::<true>(epoch_day, 19),
             to_epoch_day(2024, 2, 29)
         );
 
         let epoch_day = to_epoch_day(2022, 2, 28);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 24),
+            date_add_month_epoch_days::<true>(epoch_day, 24),
             to_epoch_day(2024, 2, 28)
         );
 
         let epoch_day = to_epoch_day(2024, 2, 29);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, 12),
+            date_add_month_epoch_days::<true>(epoch_day, 12),
             to_epoch_day(2025, 2, 28)
         );
     }
@@ -408,27 +408,27 @@ mod tests {
     fn test_date_add_months_negative() {
         let epoch_day = to_epoch_day(2022, 7, 31);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -1),
+            date_add_month_epoch_days::<true>(epoch_day, -1),
             to_epoch_day(2022, 6, 30)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -2),
+            date_add_month_epoch_days::<true>(epoch_day, -2),
             to_epoch_day(2022, 5, 31)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -3),
+            date_add_month_epoch_days::<true>(epoch_day, -3),
             to_epoch_day(2022, 4, 30)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -4),
+            date_add_month_epoch_days::<true>(epoch_day, -4),
             to_epoch_day(2022, 3, 31)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -5),
+            date_add_month_epoch_days::<true>(epoch_day, -5),
             to_epoch_day(2022, 2, 28)
         );
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -6),
+            date_add_month_epoch_days::<true>(epoch_day, -6),
             to_epoch_day(2022, 1, 31)
         );
     }
@@ -437,7 +437,7 @@ mod tests {
     fn test_date_add_months_negative_year_boundary() {
         let epoch_day = to_epoch_day(2022, 7, 31);
         assert_eq!(
-            date_add_month_epoch_days(epoch_day, -7),
+            date_add_month_epoch_days::<true>(epoch_day, -7),
             to_epoch_day(2021, 12, 31)
         );
     }
