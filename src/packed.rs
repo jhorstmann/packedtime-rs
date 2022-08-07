@@ -3,7 +3,7 @@
 // 3210765432107654321076543210
 
 use crate::format::*;
-use crate::{parse_simd, EpochDays, ParseResult};
+use crate::{parse_simd, EpochDays, ParseResult, MILLIS_PER_DAY};
 use std::fmt::{Debug, Display, Formatter};
 
 const OFFSET_BITS: u32 = 12;
@@ -98,7 +98,6 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn from_timestamp_millis(ts: i64) -> Self {
-        const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
         let epoch_days = ts.div_euclid(MILLIS_PER_DAY) as i32;
         let milli_of_day = ts.rem_euclid(MILLIS_PER_DAY) as u32;
         let millisecond = milli_of_day % 1000;

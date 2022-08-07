@@ -1,3 +1,5 @@
+use crate::MILLIS_PER_DAY;
+
 /// Conversions from/to number of days since the unix epoch.
 /// Ported from https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java
 /// Original code has the following license:
@@ -36,8 +38,6 @@
 const SECONDS_PER_DAY: i32 = 86400;
 const DAYS_PER_CYCLE: i32 = 146097;
 const DAYS_0000_TO_1970: i32 = (DAYS_PER_CYCLE * 5) - (30 * 365 + 7);
-
-const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
 
 const SUPPORT_NEGATIVE_YEAR: bool = false;
 
@@ -286,7 +286,7 @@ pub fn date_add_month_timestamp_millis_unclamped(ts: i64, months: i32) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::convert::EpochDays;
+    use crate::epoch_days::EpochDays;
     use crate::{
         date_trunc_month_timestamp_millis, date_trunc_quarter_timestamp_millis,
         date_trunc_year_timestamp_millis,
