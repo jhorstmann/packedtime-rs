@@ -1,7 +1,7 @@
 use crate::MILLIS_PER_DAY;
 
 /// Conversions from/to number of days since the unix epoch.
-/// Ported from https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java
+/// Ported from <https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java>
 /// Original code has the following license:
 /*
  * Copyright (c) 2007-present, Stephen Colebourne & Michael Nascimento Santos
