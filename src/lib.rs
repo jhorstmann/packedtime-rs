@@ -7,6 +7,7 @@
 mod epoch_days;
 mod error;
 mod format;
+mod kernels;
 mod packed;
 mod parse;
 mod util;
@@ -14,6 +15,7 @@ mod util;
 pub use epoch_days::*;
 pub use error::*;
 pub use format::*;
+pub use kernels::*;
 pub use packed::*;
 pub use parse::*;
 
