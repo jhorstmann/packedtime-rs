@@ -1,6 +1,5 @@
-use crate::convert::to_epoch_day;
 use crate::error::*;
-use crate::PackedTimestamp;
+use crate::{EpochDays, PackedTimestamp};
 
 #[repr(C)]
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -106,7 +105,8 @@ impl Timestamp {
 
 #[inline(always)]
 fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
-    let epoch_day = to_epoch_day(ts.year as i32, ts.month as i32, ts.day as i32) as i64;
+    let epoch_day =
+        EpochDays::from_ymd(ts.year as i32, ts.month as i32, ts.day as i32).days() as i64;
 
     let h = ts.hour as i64;
     let m = ts.minute as i64;
@@ -371,7 +371,7 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
     let hundreds = _mm_and_si128(nums, _mm_set1_epi16(0x00FF));
     let hundreds = _mm_mullo_epi16(hundreds, _mm_set1_epi16(10));
 
-    let ones = _mm_srli_epi16(nums, 8);
+    let ones = _mm_srli_epi16::<8>(nums);
 
     let res = _mm_add_epi16(ones, hundreds);
 

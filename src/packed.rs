@@ -3,7 +3,7 @@
 // 3210765432107654321076543210
 
 use crate::format::*;
-use crate::{from_epoch_day, parse_simd, to_epoch_day, ParseResult};
+use crate::{parse_simd, EpochDays, ParseResult};
 use std::fmt::{Debug, Display, Formatter};
 
 const OFFSET_BITS: u32 = 12;
@@ -108,7 +108,7 @@ impl PackedTimestamp {
         let minute = minute_of_day % 60;
         let hour_of_day = minute_of_day / 60;
 
-        let (year, month, day) = from_epoch_day(epoch_days as i32);
+        let (year, month, day) = EpochDays::new(epoch_days as i32).to_ymd();
 
         Self::new_utc(
             year,
@@ -123,17 +123,19 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn to_timestamp_millis(&self) -> i64 {
-        let epoch_day =
-            to_epoch_day(self.year() as i32, self.month() as i32, self.day() as i32) as i64;
+        let date = EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32)
+            .to_timestamp_millis();
 
         let h = self.hour() as i64;
         let m = self.minute() as i64;
         let s = self.second() as i64;
         let o = self.offset_minutes() as i64;
-        let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s - o * 60;
+        let seconds = h * 60 * 60 + m * 60 + s - o * 60;
         let millis = self.millisecond() as i64;
 
-        seconds * 1000 + millis
+        let time = seconds * 1000 + millis;
+
+        date + time
     }
 
     pub fn from_rfc3339_bytes(input: &[u8]) -> ParseResult<Self> {
