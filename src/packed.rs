@@ -99,7 +99,7 @@ impl PackedTimestamp {
     #[inline]
     pub fn from_timestamp_millis(ts: i64) -> Self {
         const MILLIS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
-        let epoch_days = (ts / MILLIS_PER_DAY) as i32;
+        let epoch_days = ts.div_euclid(MILLIS_PER_DAY) as i32;
         let milli_of_day = ts.rem_euclid(MILLIS_PER_DAY) as u32;
         let millisecond = milli_of_day % 1000;
         let second_of_day = milli_of_day / 1000;
@@ -325,5 +325,38 @@ pub mod tests {
         assert_eq!(30, ts.minute());
         assert_eq!(15, ts.second());
         assert_eq!(123, ts.millisecond());
+    }
+
+    #[test]
+    fn test_from_timestamp_millis() {
+        assert_eq!(
+            PackedTimestamp::from_timestamp_millis(0),
+            PackedTimestamp::new_utc(1970, 1, 1, 0, 0, 0, 0)
+        );
+
+        assert_eq!(
+            PackedTimestamp::from_timestamp_millis(1000),
+            PackedTimestamp::new_utc(1970, 1, 1, 0, 0, 1, 0)
+        );
+
+        assert_eq!(
+            PackedTimestamp::from_timestamp_millis(24 * 60 * 60 * 1000),
+            PackedTimestamp::new_utc(1970, 1, 2, 0, 0, 0, 0)
+        );
+
+        assert_eq!(
+            PackedTimestamp::from_timestamp_millis(-1),
+            PackedTimestamp::new_utc(1969, 12, 31, 23, 59, 59, 999)
+        );
+
+        assert_eq!(
+            PackedTimestamp::from_timestamp_millis(-1000),
+            PackedTimestamp::new_utc(1969, 12, 31, 23, 59, 59, 0)
+        );
+
+        assert_eq!(
+            PackedTimestamp::from_timestamp_millis(-24 * 60 * 60 * 1000),
+            PackedTimestamp::new_utc(1969, 12, 31, 0, 0, 0, 0)
+        );
     }
 }
