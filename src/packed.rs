@@ -60,6 +60,15 @@ impl PackedTimestamp {
     }
 
     #[inline]
+    pub fn new_ymd_utc(
+        year: i32,
+        month: u32,
+        day: u32,
+    ) -> Self {
+        Self::new(year, month, day, 0, 0, 0, 0, 0)
+    }
+
+    #[inline]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         year: i32,
@@ -122,7 +131,7 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn to_timestamp_millis(&self) -> i64 {
-        let date = EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32)
+        let date_part = EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32)
             .to_timestamp_millis();
 
         let h = self.hour() as i64;
@@ -132,9 +141,9 @@ impl PackedTimestamp {
         let seconds = h * 60 * 60 + m * 60 + s - o * 60;
         let millis = self.millisecond() as i64;
 
-        let time = seconds * 1000 + millis;
+        let time_part = seconds * 1000 + millis;
 
-        date + time
+        date_part + time_part
     }
 
     pub fn from_rfc3339_bytes(input: &[u8]) -> ParseResult<Self> {
@@ -297,6 +306,13 @@ impl Debug for PackedTimestamp {
                 self.millisecond()
             ))
         }
+    }
+}
+
+impl From<EpochDays> for PackedTimestamp {
+    fn from(epoch_days: EpochDays) -> Self {
+        let (year, month, day) = epoch_days.to_ymd();
+        PackedTimestamp::new_ymd_utc(year, month as _, day as _)
     }
 }
 
