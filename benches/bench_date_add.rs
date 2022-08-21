@@ -2,7 +2,7 @@ use chrono::NaiveDateTime;
 use chronoutil::shift_months;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 
-use packedtime_rs::{date_add_month_timestamp_millis, date_add_month_timestamp_millis_unclamped};
+use packedtime_rs::date_add_month_timestamp_millis;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -13,16 +13,6 @@ fn bench_date_add_month(input: &[i64], output: &mut [i64], months: i32) {
         .zip(input.iter().copied())
         .for_each(|(output, input)| {
             *output = date_add_month_timestamp_millis(input, months);
-        });
-}
-
-#[inline(never)]
-fn bench_date_add_month_unclamped(input: &[i64], output: &mut [i64], months: i32) {
-    output
-        .iter_mut()
-        .zip(input.iter().copied())
-        .for_each(|(output, input)| {
-            *output = date_add_month_timestamp_millis_unclamped(input, months);
         });
 }
 
@@ -56,9 +46,6 @@ pub fn bench_date_add(c: &mut Criterion) {
         ))
         .bench_function("date_add_month", |b| {
             b.iter(|| bench_date_add_month(&input, &mut output, 1))
-        })
-        .bench_function("date_add_month_unclamped", |b| {
-            b.iter(|| bench_date_add_month_unclamped(&input, &mut output, 1))
         })
         .bench_function("date_add_month_chronoutil", |b| {
             b.iter(|| bench_date_add_month_chronoutil(&input, &mut output, 1))

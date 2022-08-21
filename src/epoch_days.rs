@@ -160,18 +160,14 @@ impl EpochDays {
     /// then the date will be clamped to the end of the month.
     ///
     /// For example: 2022-01-31 + 1month => 2022-02-28
-    ///
-    /// Setting `CLAMP_DAYS` to false might improve performance if the date is guaranteed to fall on a valid day.
     #[inline]
-    pub fn add_months<const CLAMP_DAYS: bool>(&self, months: i32) -> Self {
+    pub fn add_months(&self, months: i32) -> Self {
         let (mut y, mut m, mut d) = self.to_ymd();
         let mut m0 = m - 1;
         m0 += months;
         y += m0.div_euclid(12);
         m0 = m0.rem_euclid(12);
-        if CLAMP_DAYS {
-            d = d.min(DAYS_PER_MONTH[is_leap_year(y) as usize][m0 as usize] as _);
-        }
+        d = d.min(DAYS_PER_MONTH[is_leap_year(y) as usize][m0 as usize] as _);
         m = m0 + 1;
         Self::from_ymd(y, m, d)
     }
