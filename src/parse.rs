@@ -67,7 +67,7 @@ impl Timestamp {
         }
     }
 
-    pub(crate) fn new_with_offset_seconds(
+    pub(crate) fn new_with_offset_minute(
         year: u16,
         month: u8,
         day: u8,
@@ -75,7 +75,7 @@ impl Timestamp {
         minute: u8,
         second: u8,
         millisecond: u32,
-        offset_second: i32,
+        offset_minute: i32,
     ) -> Self {
         Self {
             year,
@@ -85,7 +85,7 @@ impl Timestamp {
             minute,
             second,
             millisecond,
-            offset_minute: offset_second,
+            offset_minute,
         }
     }
 
@@ -420,7 +420,7 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
         minute: timestamp.minute as u8,
         second: second as u8,
         millisecond: milli,
-        offset_minute: offset_minutes * 60,
+        offset_minute: offset_minutes,
     })
 }
 
@@ -531,7 +531,7 @@ pub mod tests {
     #[test]
     fn test_parse_with_offset_simd() {
         assert_eq!(
-            Timestamp::new_with_offset_seconds(2020, 9, 19, 11, 40, 20, 123, 2 * 60 * 60),
+            Timestamp::new_with_offset_minute(2020, 9, 19, 11, 40, 20, 123, 2 * 60),
             parse_simd(b"2020-09-19T11:40:20.123+02:00").unwrap()
         );
     }

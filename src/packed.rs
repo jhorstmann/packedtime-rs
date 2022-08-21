@@ -3,8 +3,9 @@
 // 3210765432107654321076543210
 
 use crate::format::*;
-use crate::{parse_simd, EpochDays, ParseResult, MILLIS_PER_DAY};
+use crate::{parse_simd, EpochDays, ParseError, ParseResult, MILLIS_PER_DAY};
 use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
 
 const OFFSET_BITS: u32 = 12;
 const MILLI_BITS: u32 = 10;
@@ -60,11 +61,7 @@ impl PackedTimestamp {
     }
 
     #[inline]
-    pub fn new_ymd_utc(
-        year: i32,
-        month: u32,
-        day: u32,
-    ) -> Self {
+    pub fn new_ymd_utc(year: i32, month: u32, day: u32) -> Self {
         Self::new(year, month, day, 0, 0, 0, 0, 0)
     }
 
@@ -131,8 +128,9 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn to_timestamp_millis(&self) -> i64 {
-        let date_part = EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32)
-            .to_timestamp_millis();
+        let date_part =
+            EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32)
+                .to_timestamp_millis();
 
         let h = self.hour() as i64;
         let m = self.minute() as i64;
@@ -316,6 +314,22 @@ impl From<EpochDays> for PackedTimestamp {
     }
 }
 
+impl TryFrom<&str> for PackedTimestamp {
+    type Error = ParseError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        PackedTimestamp::from_rfc3339_str(s)
+    }
+}
+
+impl FromStr for PackedTimestamp {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        PackedTimestamp::from_rfc3339_str(s)
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use crate::PackedTimestamp;
@@ -323,12 +337,44 @@ pub mod tests {
     #[test]
     fn test_format() {
         assert_eq!(
-            "2020-12-24T17:30:15.010Z".to_owned(),
-            PackedTimestamp::new_utc(2020, 12, 24, 17, 30, 15, 10).to_rfc3339_string()
+            PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 0).to_rfc3339_string(),
+            "2022-08-21T17:30:15.000Z".to_owned()
         );
         assert_eq!(
-            "2020-09-10T17:30:15.123Z".to_owned(),
-            PackedTimestamp::new_utc(2020, 9, 10, 17, 30, 15, 123).to_rfc3339_string()
+            PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 100).to_rfc3339_string(),
+            "2022-08-21T17:30:15.100Z".to_owned()
+        );
+        assert_eq!(
+            PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 123).to_rfc3339_string(),
+            "2022-08-21T17:30:15.123Z".to_owned()
+        );
+        assert_eq!(
+            PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 250).to_rfc3339_string(),
+            "2022-08-21T17:30:15.250Z".to_owned()
+        );
+    }
+
+    #[test]
+    fn test_parse() {
+        assert_eq!(
+            "2022-08-21T17:30:15.250Z".parse(),
+            Ok(PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 250))
+        );
+        assert_eq!(
+            "2022-08-21T17:30:15.25Z".parse(),
+            Ok(PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 250))
+        );
+        assert_eq!(
+            "2022-08-21 17:30:15.1Z".parse(),
+            Ok(PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 100))
+        );
+        assert_eq!(
+            "2022-08-21 17:30:15Z".parse(),
+            Ok(PackedTimestamp::new_utc(2022, 8, 21, 17, 30, 15, 0))
+        );
+        assert_eq!(
+            "2022-08-21T17:30:15.250+02:00".parse(),
+            Ok(PackedTimestamp::new(2022, 8, 21, 17, 30, 15, 250, 120))
         );
     }
 

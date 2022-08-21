@@ -53,6 +53,7 @@ fn is_leap_year(year: i32) -> bool {
     ((year % 4) == 0) & ((year % 100) != 0) | ((year % 400) == 0)
 }
 
+/// A date represented as the number of days since the unix epoch 1970-01-01.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct EpochDays(i32);
 
