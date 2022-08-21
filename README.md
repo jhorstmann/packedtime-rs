@@ -15,7 +15,8 @@
 
 ### Parsing Timestamps
 
-Parsing uses SSE instructions when available and has a special fast-path when the millisecond uses 3 digits and the timezone is UTC.
+Parsing uses SSE instructions when compiled for a target that supports them.
+There is a special fast-path when the millisecond uses 3 digits and the timezone is UTC.
 Without SSE a hand-written recursive descent parser is used.
 
 ```rust
@@ -58,8 +59,17 @@ assert_eq!(
 );
 ```
 
+### Timestamp Kernels
 
+The `date_trunc` and `date_add_month` kernels are written in a way that the compiler can auto-vectorize when used in a loop.
 
+```rust
+assert_eq!(date_trunc_year_timestamp_millis(1658765238_000), 1640995200_000);
+assert_eq!(date_trunc_month_timestamp_millis(1658765238_000), 1656633600_000);
+
+assert_eq!(date_add_month_timestamp_millis(1661102969_000, 1), 1663718400_000);
+assert_eq!(date_add_month_timestamp_millis(1661102969_000, 12), 1692576000_000);
+```
 
 The package [net.jhorstmann:packedtime](https://github.com/jhorstmann/packedtime) implements the same packed layout for Java.
 

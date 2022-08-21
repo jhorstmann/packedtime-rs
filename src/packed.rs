@@ -332,7 +332,7 @@ impl FromStr for PackedTimestamp {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::PackedTimestamp;
+    use crate::{PackedTimestamp, ParseError};
 
     #[test]
     fn test_format() {
@@ -375,6 +375,18 @@ pub mod tests {
         assert_eq!(
             "2022-08-21T17:30:15.250+02:00".parse(),
             Ok(PackedTimestamp::new(2022, 8, 21, 17, 30, 15, 250, 120))
+        );
+    }
+
+    #[test]
+    fn test_parse_error() {
+        assert_eq!(
+            PackedTimestamp::try_from("2022-08-21 FOO"),
+            Err(ParseError::InvalidLen(14))
+        );
+        assert_eq!(
+            PackedTimestamp::try_from("2022-08-21 XX:YY::ZZZ"),
+            Err(ParseError::InvalidChar(11))
         );
     }
 

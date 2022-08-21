@@ -94,8 +94,8 @@ pub fn date_add_month_timestamp_millis_unclamped(ts: i64, months: i32) -> i64 {
 mod tests {
     use crate::epoch_days::EpochDays;
     use crate::{
-        date_trunc_month_timestamp_millis, date_trunc_quarter_timestamp_millis,
-        date_trunc_year_timestamp_millis,
+        date_add_month_timestamp_millis, date_trunc_month_timestamp_millis,
+        date_trunc_quarter_timestamp_millis, date_trunc_year_timestamp_millis,
     };
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
     use std::ops::Add;
@@ -150,11 +150,11 @@ mod tests {
     fn test_date_trunc_month_millis() {
         assert_eq!(
             1640995200_000,
-            super::date_trunc_month_timestamp_millis(1640995200_000)
+            date_trunc_month_timestamp_millis(1640995200_000)
         );
         assert_eq!(
             1656633600_000,
-            super::date_trunc_month_timestamp_millis(1658765238_000)
+            date_trunc_month_timestamp_millis(1658765238_000)
         );
     }
 
@@ -256,6 +256,18 @@ mod tests {
         assert_eq!(
             epoch_day.add_months::<true>(-7),
             EpochDays::from_ymd(2021, 12, 31)
+        );
+    }
+
+    #[test]
+    fn test_date_add_months_timestamp_millis() {
+        assert_eq!(
+            date_add_month_timestamp_millis(1661102969_000, 1),
+            1663718400_000
+        );
+        assert_eq!(
+            date_add_month_timestamp_millis(1661102969_000, 12),
+            1692576000_000
         );
     }
 
