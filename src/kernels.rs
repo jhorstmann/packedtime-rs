@@ -58,7 +58,7 @@ pub fn date_trunc_year_timestamp_millis(ts: i64) -> i64 {
 #[inline]
 pub fn date_trunc_year_timestamp_millis_float(ts: f64) -> f64 {
     let epoch_days = EpochDays::from_timestamp_millis_float(ts);
-    let truncated = epoch_days.date_trunc_month();
+    let truncated = epoch_days.date_trunc_year();
     truncated.to_timestamp_millis_float()
 }
 
