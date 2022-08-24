@@ -189,11 +189,47 @@ impl EpochDays {
         let (y, m, d) = self.to_ymd();
         Self::from_ymd(y, (m - 1) / 3 * 3 + 1, 1)
     }
+
+    #[inline]
+    pub fn extract_year(&self) -> i32 {
+        self.to_ymd().0
+    }
+
+    #[inline]
+    pub fn extract_month(&self) -> i32 {
+        self.to_ymd().1
+    }
+
+    #[inline]
+    pub fn extract_quarter(&self) -> i32 {
+        (self.to_ymd().1 - 1) / 3 + 1
+    }
+
+    #[inline]
+    pub fn extract_day_of_month(&self) -> i32 {
+        self.to_ymd().2
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::epoch_days::is_leap_year;
     use crate::EpochDays;
+
+    #[test]
+    fn test_is_leap_year() {
+        assert!(!is_leap_year(1900));
+        assert!(!is_leap_year(1999));
+
+        assert!(is_leap_year(2000));
+
+        assert!(!is_leap_year(2001));
+        assert!(!is_leap_year(2002));
+        assert!(!is_leap_year(2003));
+
+        assert!(is_leap_year(2004));
+        assert!(is_leap_year(2020));
+    }
 
     #[test]
     fn test_to_epoch_day() {
@@ -210,5 +246,41 @@ mod tests {
     #[test]
     fn test_date_trunc_year_epoch_days() {
         assert_eq!(18993, EpochDays::new(19198).date_trunc_year().days());
+    }
+
+    #[test]
+    fn test_extract_year() {
+        assert_eq!(2022, EpochDays::from_ymd(2022, 1, 1).extract_year());
+        assert_eq!(2022, EpochDays::from_ymd(2022, 8, 24).extract_year());
+        assert_eq!(2022, EpochDays::from_ymd(2022, 12, 31).extract_year());
+    }
+
+    #[test]
+    fn test_extract_month() {
+        assert_eq!(1, EpochDays::from_ymd(2000, 1, 1).extract_month());
+        assert_eq!(2, EpochDays::from_ymd(2000, 2, 1).extract_month());
+        assert_eq!(2, EpochDays::from_ymd(2000, 2, 29).extract_month());
+        assert_eq!(1, EpochDays::from_ymd(2022, 1, 1).extract_month());
+        assert_eq!(8, EpochDays::from_ymd(2022, 8, 24).extract_month());
+        assert_eq!(12, EpochDays::from_ymd(2022, 12, 31).extract_month());
+    }
+
+    #[test]
+    fn test_extract_day() {
+        assert_eq!(1, EpochDays::from_ymd(2000, 1, 1).extract_day_of_month());
+        assert_eq!(1, EpochDays::from_ymd(2000, 2, 1).extract_day_of_month());
+        assert_eq!(29, EpochDays::from_ymd(2000, 2, 29).extract_day_of_month());
+        assert_eq!(1, EpochDays::from_ymd(2000, 3, 1).extract_day_of_month());
+    }
+
+    #[test]
+    fn test_extract_quarter() {
+        assert_eq!(1, EpochDays::from_ymd(2000, 1, 1).extract_quarter());
+        assert_eq!(1, EpochDays::from_ymd(2000, 2, 1).extract_quarter());
+        assert_eq!(1, EpochDays::from_ymd(2000, 3, 31).extract_quarter());
+        assert_eq!(2, EpochDays::from_ymd(2000, 4, 1).extract_quarter());
+        assert_eq!(3, EpochDays::from_ymd(2000, 7, 1).extract_quarter());
+        assert_eq!(4, EpochDays::from_ymd(2000, 10, 1).extract_quarter());
+        assert_eq!(4, EpochDays::from_ymd(2000, 12, 31).extract_quarter());
     }
 }
