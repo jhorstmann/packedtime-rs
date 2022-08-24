@@ -83,6 +83,25 @@ pub fn date_add_month_timestamp_millis(ts: i64, months: i32) -> i64 {
     new_epoch_days.to_timestamp_millis()
 }
 
+#[inline]
+pub fn date_add_month_timestamp_millis_float(ts: f64, months: i32) -> f64 {
+    let epoch_days = EpochDays::from_timestamp_millis_float(ts);
+    let new_epoch_days = epoch_days.add_months(months);
+    new_epoch_days.to_timestamp_millis_float()
+}
+
+#[inline]
+pub fn date_part_year_timestamp_millis(ts: i64) -> i32 {
+    let epoch_days = EpochDays::from_timestamp_millis(ts);
+    epoch_days.extract_year()
+}
+
+#[inline]
+pub fn date_part_month_timestamp_millis(ts: i64) -> i32 {
+    let epoch_days = EpochDays::from_timestamp_millis(ts);
+    epoch_days.extract_month()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::epoch_days::EpochDays;
