@@ -139,6 +139,10 @@ pub fn parse_to_packed_timestamp_scalar(input: &str) -> ParseResult<PackedTimest
 }
 
 pub(crate) fn parse_scalar(bytes: &[u8]) -> ParseResult<Timestamp> {
+    if bytes.len() < 16 {
+        return Err(ParseError::InvalidLen(bytes.len()));
+    }
+
     let mut timestamp = Timestamp::default();
     let mut index = 0;
 
@@ -202,6 +206,9 @@ fn parse_seconds_and_nanos_and_offset_minutes_slow_path(
 
 #[inline(always)]
 fn parse_utc_or_offset_minutes(bytes: &[u8], index: &mut usize) -> ParseResult<i32> {
+    if *index >= bytes.len() {
+        return Err(ParseError::InvalidLen(*index));
+    }
     let first = bytes[*index];
     if first == b'Z' {
         *index += 1;
@@ -279,6 +286,9 @@ fn parse_nano(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
 
 #[inline(always)]
 fn expect(bytes: &[u8], i: &mut usize, expected: u8) -> ParseResult<()> {
+    if *i >= bytes.len() {
+        return Err(ParseError::InvalidLen(*i));
+    }
     let ch = bytes[*i];
     if ch == expected {
         *i += 1;
@@ -290,6 +300,9 @@ fn expect(bytes: &[u8], i: &mut usize, expected: u8) -> ParseResult<()> {
 
 #[inline(always)]
 fn expect2(bytes: &[u8], i: &mut usize, expected1: u8, expected2: u8) -> ParseResult<u8> {
+    if *i >= bytes.len() {
+        return Err(ParseError::InvalidLen(*i));
+    }
     let ch = bytes[*i];
     if ch == expected1 || ch == expected2 {
         *i += 1;
@@ -301,6 +314,9 @@ fn expect2(bytes: &[u8], i: &mut usize, expected1: u8, expected2: u8) -> ParseRe
 
 #[inline(always)]
 fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
+    if *i >= bytes.len() {
+        return Err(ParseError::InvalidLen(*i));
+    }
     let ch = bytes[*i];
     if ch >= b'0' && ch <= b'9' {
         *i += 1;

@@ -3,7 +3,7 @@
 // 3210765432107654321076543210
 
 use crate::format::*;
-use crate::{parse_simd, EpochDays, ParseError, ParseResult, MILLIS_PER_DAY};
+use crate::{EpochDays, ParseError, ParseResult, MILLIS_PER_DAY};
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
@@ -147,12 +147,12 @@ impl PackedTimestamp {
     pub fn from_rfc3339_bytes(input: &[u8]) -> ParseResult<Self> {
         #[cfg(target_feature = "sse4.1")]
         {
-            let ts = parse_simd(input)?;
+            let ts = crate::parse::parse_simd(input)?;
             Ok(ts.to_packed())
         }
         #[cfg(not(target_feature = "sse4.1"))]
         {
-            let ts = parse_scalar(input)?;
+            let ts = crate::parse::parse_scalar(input)?;
             Ok(ts.to_packed())
         }
     }
@@ -383,6 +383,10 @@ pub mod tests {
         assert_eq!(
             PackedTimestamp::try_from("2022-08-21 FOO"),
             Err(ParseError::InvalidLen(14))
+        );
+        assert_eq!(
+            PackedTimestamp::try_from("2022-08-21 00:00"),
+            Err(ParseError::InvalidLen(16))
         );
         assert_eq!(
             PackedTimestamp::try_from("2022-08-21 XX:YY::ZZZ"),
