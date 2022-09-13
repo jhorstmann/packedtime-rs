@@ -352,7 +352,7 @@ checksum = "a170cebd8021a008ea92e4db85a72f80b35df514ec664b296fdcbb654eac0b2c"
 
 [[package]]
 name = "packedtime-rs"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "chrono",
  "chronoutil",
