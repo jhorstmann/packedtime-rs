@@ -1,3 +1,4 @@
+#[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
 const PATTERN_COMPLETE: &str = "0000-00-00T00:00:00.000Z00:00:00";
@@ -10,6 +11,7 @@ const _: () = {
 };
 
 #[inline]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3,sse4.1")]
 #[doc(hidden)] // used in benchmarks
 pub unsafe fn format_simd_mul_to_slice(
@@ -85,6 +87,7 @@ pub unsafe fn format_simd_mul_to_slice(
 }
 
 #[inline]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3,sse4.1")]
 unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
     let mut res = _mm_loadu_si128(numbers.as_ptr() as *const _);
@@ -124,6 +127,7 @@ unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
 }
 
 #[inline(always)]
+#[cfg(target_arch = "x86_64")]
 unsafe fn simd_double_dabble_256(numbers: &[u16; 16]) -> __m256i {
     let mut res = _mm256_loadu_si256(numbers.as_ptr() as *const _);
 
@@ -164,6 +168,7 @@ unsafe fn simd_double_dabble_256(numbers: &[u16; 16]) -> __m256i {
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: -MM-ddThh:mm:ss.
 #[inline]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3")]
 unsafe fn format_mmddhhmmss_double_dabble(
     buffer: *mut u8,
@@ -190,6 +195,7 @@ unsafe fn format_mmddhhmmss_double_dabble(
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: YYYY-MM-ddThh:mm:ss.
 #[inline]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3")]
 unsafe fn format_yyyymmddhhmm_double_dabble(
     buffer: *mut u8,
@@ -217,6 +223,7 @@ unsafe fn format_yyyymmddhhmm_double_dabble(
 /// formats the timestamp into the output buffer including separator chars, starting with the dash before the month and ending with a dot after the seconds.
 /// Example: YYYY-MM-ddThh:mm:ss.
 #[inline]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3")]
 unsafe fn format_ss_sss_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16, milli_lo: u16) {
     let mut res = simd_double_dabble(&[milli_hi, milli_lo, second, 0, 0, 0, 0, 0]);
@@ -235,6 +242,7 @@ unsafe fn format_ss_sss_double_dabble(buffer: *mut u8, second: u16, milli_hi: u1
 }
 
 #[inline]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3")]
 #[doc(hidden)] // used in benchmarks
 pub unsafe fn format_simd_dd_to_slice(
