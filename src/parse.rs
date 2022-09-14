@@ -503,10 +503,10 @@ pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
     target_feature = "sse2",
     target_feature = "ssse3"
 ))]
-pub mod tests {
+pub mod simd_tests {
     use crate::error::ParseError;
-    use crate::parse::{parse_scalar, parse_simd, Timestamp};
-    use crate::{parse_to_epoch_millis_scalar, parse_to_epoch_millis_simd};
+    use crate::parse::{parse_simd, Timestamp};
+    use crate::parse_to_epoch_millis_simd;
 
     #[test]
     fn test_valid() {
@@ -555,14 +555,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_parse_scalar() {
-        assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
-            parse_scalar(b"2345-12-24T17:30:15.123Z").unwrap()
-        );
-    }
-
-    #[test]
     fn test_parse_simd() {
         assert_eq!(
             Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
@@ -576,16 +568,6 @@ pub mod tests {
             Timestamp::new_with_offset_minute(2020, 9, 19, 11, 40, 20, 123, 2 * 60),
             parse_simd(b"2020-09-19T11:40:20.123+02:00").unwrap()
         );
-    }
-
-    #[test]
-    fn test_parse_millis_scalar() {
-        let input = "2020-09-18T23:30:15Z";
-        let expected = chrono::DateTime::parse_from_rfc3339(input)
-            .unwrap()
-            .timestamp_millis();
-        let actual = parse_to_epoch_millis_scalar(input).unwrap();
-        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -606,6 +588,29 @@ pub mod tests {
             .unwrap()
             .timestamp_millis();
         let actual = parse_to_epoch_millis_simd(input).unwrap();
+        assert_eq!(expected, actual);
+    }
+}
+
+#[cfg(test)]
+mod scalar_tests {
+    use crate::{parse_scalar, parse_to_epoch_millis_scalar, Timestamp};
+
+    #[test]
+    fn test_parse_scalar() {
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_scalar(b"2345-12-24T17:30:15.123Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_millis_scalar() {
+        let input = "2020-09-18T23:30:15Z";
+        let expected = chrono::DateTime::parse_from_rfc3339(input)
+            .unwrap()
+            .timestamp_millis();
+        let actual = parse_to_epoch_millis_scalar(input).unwrap();
         assert_eq!(expected, actual);
     }
 }
