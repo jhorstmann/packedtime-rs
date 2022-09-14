@@ -329,6 +329,11 @@ fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
 // only public for benchmarks
 #[doc(hidden)]
 #[inline]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
     let ts = parse_simd(input.as_bytes())?;
     Ok(ts_to_epoch_millis(&ts))
@@ -337,6 +342,11 @@ pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
 // only public for benchmarks
 #[doc(hidden)]
 #[inline]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestamp> {
     let ts = parse_simd(input.as_bytes())?;
     Ok(PackedTimestamp::new(
@@ -351,7 +361,13 @@ pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestam
     ))
 }
 
-#[inline(always)]
+#[inline]
+#[cfg(target_arch = "x86_64")]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimestamp> {
     use std::arch::x86_64::*;
 
@@ -397,7 +413,12 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
     Ok(timestamp)
 }
 
-#[inline(always)]
+#[inline]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
     if bytes.len() < 16 {
         return Err(ParseError::InvalidLen(bytes.len()));
@@ -477,6 +498,11 @@ pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
 }
 
 #[cfg(test)]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 pub mod tests {
     use crate::error::ParseError;
     use crate::parse::{parse_scalar, parse_simd, Timestamp};
