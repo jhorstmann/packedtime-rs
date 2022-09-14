@@ -335,36 +335,39 @@ pub fn format_scalar_to_slice(
 }
 
 #[cfg(test)]
-pub mod tests {
-    use crate::{format_scalar_to_slice, format_simd_dd_to_slice, format_simd_mul_to_slice};
+type FormatToSlice = unsafe fn(&mut [u8], u32, u32, u32, u32, u32, u32, u32);
 
-    type FormatToSlice = unsafe fn(&mut [u8], u32, u32, u32, u32, u32, u32, u32);
+#[cfg(test)]
+fn assert_format(
+    expected: &str,
+    year: u32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+    millisecond: u32,
+    f: FormatToSlice,
+) {
+    let mut buffer: Vec<u8> = Vec::with_capacity(32);
 
-    fn assert_format(
-        expected: &str,
-        year: u32,
-        month: u32,
-        day: u32,
-        hour: u32,
-        minute: u32,
-        second: u32,
-        millisecond: u32,
-        f: FormatToSlice,
-    ) {
-        let mut buffer: Vec<u8> = Vec::with_capacity(32);
+    unsafe { buffer.set_len(24) };
 
-        unsafe { buffer.set_len(24) };
+    let slice = &mut buffer.as_mut_slice()[0..24];
 
-        let slice = &mut buffer.as_mut_slice()[0..24];
-
-        unsafe {
-            f(slice, year, month, day, hour, minute, second, millisecond);
-        }
-
-        let actual = String::from_utf8(buffer).unwrap();
-
-        assert_eq!(expected, &actual);
+    unsafe {
+        f(slice, year, month, day, hour, minute, second, millisecond);
     }
+
+    let actual = String::from_utf8(buffer).unwrap();
+
+    assert_eq!(expected, &actual);
+}
+
+#[cfg(test)]
+mod scalar_tests {
+    use crate::format::assert_format;
+    use crate::format_scalar_to_slice;
 
     #[test]
     fn test_format_scalar() {
@@ -402,6 +405,17 @@ pub mod tests {
             format_scalar_to_slice,
         );
     }
+}
+
+#[cfg(test)]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
+mod simd_tests {
+    use crate::format::assert_format;
+    use crate::{format_simd_dd_to_slice, format_simd_mul_to_slice};
 
     #[test]
     fn test_format_simd_dd() {
