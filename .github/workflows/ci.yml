@@ -32,3 +32,5 @@ jobs:
        with:
          command: test
          args: --all
+       env:
+         RUSTFLAGS: "-Ctarget-cpu=skylake"

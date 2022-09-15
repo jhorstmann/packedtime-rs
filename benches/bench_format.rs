@@ -1,8 +1,6 @@
 use chrono::{DateTime, Datelike, NaiveDateTime, SecondsFormat, Timelike, Utc};
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use packedtime_rs::format_simd_dd_to_slice;
-use packedtime_rs::format_simd_mul_to_slice;
-use packedtime_rs::{format_scalar_to_slice, PackedTimestamp};
+use packedtime_rs::PackedTimestamp;
 use std::io::{Cursor, Write};
 
 use rand::rngs::StdRng;
@@ -30,34 +28,57 @@ fn bench_scalar(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mu
         .chunks_mut(24)
         .zip(input_parts.iter().copied())
         .for_each(|(ouput, (year, month, day, hour, minute, second, milli))| {
-            format_scalar_to_slice(ouput, year, month, day, hour, minute, second, milli)
+            packedtime_rs::format_scalar_to_slice(
+                ouput, year, month, day, hour, minute, second, milli,
+            )
         });
 }
 
 #[inline(never)]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3",
+    target_feature = "sse4.1",
+))]
 fn bench_simd_mul(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mut [u8]) {
     output
         .chunks_mut(24)
         .zip(input_parts.iter().copied())
         .for_each(
             |(ouput, (year, month, day, hour, minute, second, milli))| unsafe {
-                format_simd_mul_to_slice(ouput, year, month, day, hour, minute, second, milli)
+                packedtime_rs::format_simd_mul_to_slice(
+                    ouput, year, month, day, hour, minute, second, milli,
+                )
             },
         );
 }
 
 #[inline(never)]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 fn bench_simd_dd(input_parts: &[(u32, u32, u32, u32, u32, u32, u32)], output: &mut [u8]) {
     output
         .chunks_mut(24)
         .zip(input_parts.iter().copied())
         .for_each(
             |(ouput, (year, month, day, hour, minute, second, milli))| unsafe {
-                format_simd_dd_to_slice(ouput, year, month, day, hour, minute, second, milli)
+                packedtime_rs::format_simd_dd_to_slice(
+                    ouput, year, month, day, hour, minute, second, milli,
+                )
             },
         );
 }
 
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3",
+    target_feature = "sse4.1"
+))]
 #[inline(never)]
 fn bench_timestamp_simd(input: &[i64], output: &mut [u8]) {
     output
@@ -66,7 +87,7 @@ fn bench_timestamp_simd(input: &[i64], output: &mut [u8]) {
         .for_each(|(out, inp)| {
             let ts = PackedTimestamp::from_timestamp_millis(*inp);
             unsafe {
-                format_simd_mul_to_slice(
+                packedtime_rs::format_simd_mul_to_slice(
                     out,
                     ts.year(),
                     ts.month(),
@@ -87,7 +108,7 @@ fn bench_timestamp_scalar(input: &[i64], output: &mut [u8]) {
         .zip(input.iter())
         .for_each(|(out, inp)| {
             let ts = PackedTimestamp::from_timestamp_millis(*inp);
-            format_scalar_to_slice(
+            packedtime_rs::format_scalar_to_slice(
                 out,
                 ts.year(),
                 ts.month(),
@@ -124,19 +145,27 @@ pub fn bench_format(c: &mut Criterion) {
         .map(|_| rng.gen_range(0..4102444800_000_i64))
         .collect::<Vec<i64>>();
 
-    c.benchmark_group("format_timestamp")
-        .throughput(Throughput::Bytes(
+    {
+        let mut group = c.benchmark_group("format_timestamp");
+        let group = group.throughput(Throughput::Bytes(
             (BATCH_SIZE * (std::mem::size_of::<i64>() + 24)) as u64,
-        ))
-        .bench_function("format_simd", |b| {
+        ));
+        #[cfg(all(
+            target_arch = "x86_64",
+            target_feature = "sse2",
+            target_feature = "ssse3",
+            target_feature = "sse4.1"
+        ))]
+        group.bench_function("format_simd", |b| {
             b.iter(|| bench_timestamp_simd(&inputs, &mut output));
-        })
-        .bench_function("format_scalar", |b| {
+        });
+        group.bench_function("format_scalar", |b| {
             b.iter(|| bench_timestamp_scalar(&inputs, &mut output));
-        })
-        .bench_function("format_chrono", |b| {
+        });
+        group.bench_function("format_chrono", |b| {
             b.iter(|| bench_timestamp_chrono(&inputs, &mut output));
         });
+    }
 
     let inputs = inputs
         .iter()
@@ -154,30 +183,43 @@ pub fn bench_format(c: &mut Criterion) {
         })
         .collect::<Vec<_>>();
 
-    c.benchmark_group("format")
-        .throughput(Throughput::Bytes(
+    {
+        let mut group = c.benchmark_group("format");
+        let group = group.throughput(Throughput::Bytes(
             (BATCH_SIZE * (std::mem::size_of_val(&inputs[0]) + 24)) as u64,
-        ))
-        .bench_function("format_simd_dd", |b| {
+        ));
+        #[cfg(all(
+            target_arch = "x86_64",
+            target_feature = "sse2",
+            target_feature = "ssse3"
+        ))]
+        group.bench_function("format_simd_dd", |b| {
             b.iter(|| {
                 bench_simd_dd(&inputs, &mut output);
             })
-        })
-        .bench_function("format_simd_mul", |b| {
+        });
+        #[cfg(all(
+            target_arch = "x86_64",
+            target_feature = "sse2",
+            target_feature = "ssse3",
+            target_feature = "sse4.1"
+        ))]
+        group.bench_function("format_simd_mul", |b| {
             b.iter(|| {
                 bench_simd_mul(&inputs, &mut output);
             })
-        })
-        .bench_function("format_scalar", |b| {
+        });
+        group.bench_function("format_scalar", |b| {
             b.iter(|| {
                 bench_scalar(&inputs, &mut output);
             })
-        })
-        .bench_function("format_write_fmt", |b| {
+        });
+        group.bench_function("format_write_fmt", |b| {
             b.iter(|| {
                 bench_write_fmt(&inputs, &mut output);
             })
         });
+    }
 }
 
 criterion_group!(benches, bench_format);

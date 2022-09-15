@@ -1,7 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use packedtime_rs::{
-    parse_to_packed_timestamp_scalar, parse_to_packed_timestamp_simd, PackedTimestamp,
-};
+use packedtime_rs::PackedTimestamp;
 use std::fmt::Write;
 use std::ops::Range;
 
@@ -17,10 +15,15 @@ fn bench_parse_scalar(input: &[u8], output: &mut [PackedTimestamp], date_len: us
         .zip(input.chunks(date_len))
         .for_each(|(output, input)| {
             let s = unsafe { std::str::from_utf8_unchecked(input) };
-            *output = parse_to_packed_timestamp_scalar(s).unwrap();
+            *output = packedtime_rs::parse_to_packed_timestamp_scalar(s).unwrap();
         });
 }
 
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 #[inline(never)]
 fn bench_parse_simd(input: &[u8], output: &mut [PackedTimestamp], date_len: usize) {
     output
@@ -28,7 +31,7 @@ fn bench_parse_simd(input: &[u8], output: &mut [PackedTimestamp], date_len: usiz
         .zip(input.chunks(date_len))
         .for_each(|(output, input)| {
             let s = unsafe { std::str::from_utf8_unchecked(input) };
-            *output = parse_to_packed_timestamp_simd(s).unwrap();
+            *output = packedtime_rs::parse_to_packed_timestamp_simd(s).unwrap();
         });
 }
 
@@ -113,28 +116,45 @@ pub fn bench_parse(c: &mut Criterion) {
 
     let mut output = vec![PackedTimestamp::from_value(0); BATCH_SIZE];
 
-    c.benchmark_group("parse_utc")
-        .throughput(Throughput::Bytes(
+    {
+        let mut group = c.benchmark_group("parse_utc");
+        let group = group.throughput(Throughput::Bytes(
             (input_utc.len() + BATCH_SIZE * std::mem::size_of::<i64>()) as u64,
-        ))
-        .bench_function("parse_scalar", |b| {
-            b.iter(|| bench_parse_scalar(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
-        })
-        .bench_function("parse_simd", |b| {
+        ));
+        #[cfg(all(
+            target_arch = "x86_64",
+            target_feature = "sse2",
+            target_feature = "ssse3"
+        ))]
+        group.bench_function("parse_simd", |b| {
             b.iter(|| bench_parse_simd(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
-        })
-        .bench_function("parse_chrono", |b| {
+        });
+        group.bench_function("parse_scalar", |b| {
+            b.iter(|| bench_parse_scalar(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
+        });
+        group.bench_function("parse_chrono", |b| {
             b.iter(|| bench_parse_chrono(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
-        })
-        .bench_function("parse_time", |b| {
+        });
+        group.bench_function("parse_time", |b| {
             b.iter(|| bench_parse_time(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
         });
+    }
 
-    c.benchmark_group("parse_offset")
-        .throughput(Throughput::Bytes(
+    {
+        let mut group = c.benchmark_group("parse_offset");
+
+        let group = group.throughput(Throughput::Bytes(
             (input_with_offset.len() + BATCH_SIZE * std::mem::size_of::<i64>()) as u64,
-        ))
-        .bench_function("parse_scalar", |b| {
+        ));
+        #[cfg(all(
+            target_arch = "x86_64",
+            target_feature = "sse2",
+            target_feature = "ssse3"
+        ))]
+        group.bench_function("parse_simd", |b| {
+            b.iter(|| bench_parse_simd(input_utc.as_bytes(), &mut output, DATE_LEN_UTC))
+        });
+        group.bench_function("parse_scalar", |b| {
             b.iter(|| {
                 bench_parse_scalar(
                     input_with_offset.as_bytes(),
@@ -142,17 +162,8 @@ pub fn bench_parse(c: &mut Criterion) {
                     DATE_LEN_WITH_OFFSET,
                 )
             })
-        })
-        .bench_function("parse_simd", |b| {
-            b.iter(|| {
-                bench_parse_simd(
-                    input_with_offset.as_bytes(),
-                    &mut output,
-                    DATE_LEN_WITH_OFFSET,
-                )
-            })
-        })
-        .bench_function("parse_chrono", |b| {
+        });
+        group.bench_function("parse_chrono", |b| {
             b.iter(|| {
                 bench_parse_chrono(
                     input_with_offset.as_bytes(),
@@ -160,8 +171,8 @@ pub fn bench_parse(c: &mut Criterion) {
                     DATE_LEN_WITH_OFFSET,
                 )
             })
-        })
-        .bench_function("parse_time", |b| {
+        });
+        group.bench_function("parse_time", |b| {
             b.iter(|| {
                 bench_parse_time(
                     input_with_offset.as_bytes(),
@@ -170,6 +181,7 @@ pub fn bench_parse(c: &mut Criterion) {
                 )
             })
         });
+    }
 }
 
 criterion_group!(benches, bench_parse);

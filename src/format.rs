@@ -68,6 +68,7 @@ pub unsafe fn format_simd_mul_to_slice(
     );
 
     // insert hundreds of milliseconds now that we have room
+    // this is the only instruction in this method that requires sse4.1
     let fmt_lo = _mm_insert_epi8(fmt_lo, (millisecond % 10) as i32, 6);
 
     // add '0' and separator ascii values
@@ -88,7 +89,7 @@ pub unsafe fn format_simd_mul_to_slice(
 
 #[inline]
 #[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse2,ssse3,sse4.1")]
+#[target_feature(enable = "sse2,ssse3")]
 unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
     let mut res = _mm_loadu_si128(numbers.as_ptr() as *const _);
 
@@ -126,8 +127,9 @@ unsafe fn simd_double_dabble(numbers: &[u16; 8]) -> std::arch::x86_64::__m128i {
     res
 }
 
-#[inline(always)]
+#[inline]
 #[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
 unsafe fn simd_double_dabble_256(numbers: &[u16; 16]) -> __m256i {
     let mut res = _mm256_loadu_si256(numbers.as_ptr() as *const _);
 
@@ -411,7 +413,8 @@ mod scalar_tests {
 #[cfg(all(
     target_arch = "x86_64",
     target_feature = "sse2",
-    target_feature = "ssse3"
+    target_feature = "ssse3",
+    target_feature = "sse4.1"
 ))]
 mod simd_tests {
     use crate::format::assert_format;
