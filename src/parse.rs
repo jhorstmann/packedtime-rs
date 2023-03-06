@@ -462,14 +462,35 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
 }
 
 #[inline(always)]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
 fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
+    use std::arch::x86_64::*;
     if input.len() >= 24 {
-        let min: u64 = unsafe { std::ptr::read_unaligned(b":00.000+".as_ptr() as *const u64) };
-        let max: u64 = unsafe { std::ptr::read_unaligned(b":99.999Z".as_ptr() as *const u64) };
         let buf = unsafe { std::ptr::read_unaligned(input.as_ptr().add(16) as *const u64) };
 
-        if buf < min || buf > max {
-            return None;
+        unsafe {
+            let min = _mm_sub_epi8(
+                _mm_set_epi64x(0, i64::from_le_bytes(*b":00.000+")),
+                _mm_set1_epi64x(0x01010101_01010101),
+            );
+            let max = _mm_add_epi8(
+                _mm_set_epi64x(0, i64::from_le_bytes(*b":99.999Z")),
+                _mm_set1_epi64x(0x01010101_01010101),
+            );
+            let reg = _mm_set1_epi64x(buf as _);
+
+            let gt = _mm_cmpgt_epi8(reg, min);
+            let lt = _mm_cmplt_epi8(reg, max);
+
+            let mask = _mm_movemask_epi8(_mm_and_si128(gt, lt));
+
+            if mask != 0xFF {
+                return None;
+            }
         }
 
         let buf = buf.to_le_bytes();
@@ -505,7 +526,7 @@ pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
 ))]
 pub mod simd_tests {
     use crate::error::ParseError;
-    use crate::parse::{parse_simd, Timestamp};
+    use crate::parse::{parse_simd, try_parse_seconds_and_millis_simd, Timestamp};
     use crate::parse_to_epoch_millis_simd;
 
     #[test]
@@ -589,6 +610,37 @@ pub mod simd_tests {
             .timestamp_millis();
         let actual = parse_to_epoch_millis_simd(input).unwrap();
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_try_parse_seconds_and_millis_simd() {
+        let input = b"2020-09-08T13:42:29+00:00";
+        // fast path should require milliseconds
+        assert!(try_parse_seconds_and_millis_simd(input).is_none());
+
+        let input = b"2020-09-08T13:42:29.123Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'Z'))
+        );
+
+        let input = b"2020-09-08T13:42:29.123+01:00";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'+'))
+        );
+
+        let input = b"2020-09-08T13:42:29.123-01:00";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'-'))
+        );
+
+        let input = b"2020-09-08T13:42:29.123456Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
     }
 }
 
