@@ -204,6 +204,16 @@ fn parse_seconds_and_nanos_and_offset_minutes_slow_path(
     Ok((seconds, nanos, offset_minutes))
 }
 
+#[inline(never)]
+fn skip_nanos_and_parse_offset_minutes_slow_path(
+    bytes: &[u8],
+    index: &mut usize,
+) -> ParseResult<i32> {
+    skip_fractional_millis(bytes, index);
+    let offset_minutes = parse_utc_or_offset_minutes(bytes, index)?;
+    Ok(offset_minutes)
+}
+
 #[inline(always)]
 fn parse_utc_or_offset_minutes(bytes: &[u8], index: &mut usize) -> ParseResult<i32> {
     if *index >= bytes.len() {
@@ -282,6 +292,21 @@ fn parse_nano(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
     }
 
     Ok(r * NANO_MULTIPLIER[9 - j])
+}
+
+#[inline(always)]
+fn skip_fractional_millis(bytes: &[u8], i: &mut usize) {
+    let mut j = 0;
+
+    while *i < bytes.len() && j < 6 {
+        let ch = bytes[*i];
+        if ch >= b'0' && ch <= b'9' {
+            j += 1;
+            *i += 1;
+        } else {
+            break;
+        }
+    }
 }
 
 #[inline(always)]
@@ -426,28 +451,7 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
 
     let timestamp = unsafe { parse_simd_yyyy_mm_dd_hh_mm(bytes.as_ptr())? };
 
-    let (second, milli, offset_minutes) =
-        if let Some((second, nano, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
-            let offset = match offset_sign {
-                b'Z' => 0,
-                b'+' | b'-' => {
-                    let mut index = 24;
-                    let tmp = parse_offset_minutes(bytes, &mut index)? as i32;
-                    if offset_sign == b'-' {
-                        -tmp
-                    } else {
-                        tmp
-                    }
-                }
-                _ => return Err(ParseError::InvalidChar(23)),
-            };
-            (second, nano, offset)
-        } else {
-            let mut index = 16;
-            let (second, nano, offset_minutes) =
-                parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
-            (second, nano / 1_000_000, offset_minutes)
-        };
+    let (seconds, millis, offset_minutes) = parse_seconds_and_millis_simd(bytes)?;
 
     Ok(Timestamp {
         year: timestamp.year_hi * 100 + timestamp.year_lo,
@@ -455,10 +459,45 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
         day: timestamp.day as u8,
         hour: timestamp.hour as u8,
         minute: timestamp.minute as u8,
-        second: second as u8,
-        millisecond: milli,
+        second: seconds as u8,
+        millisecond: millis,
         offset_minute: offset_minutes,
     })
+}
+
+#[inline(always)]
+#[cfg(all(
+    target_arch = "x86_64",
+    target_feature = "sse2",
+    target_feature = "ssse3"
+))]
+fn parse_seconds_and_millis_simd(bytes: &[u8]) -> ParseResult<(u32, u32, i32)> {
+    if let Some((seconds, millis, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
+        match offset_sign {
+            b'Z' => return Ok((seconds, millis, 0)),
+            b'+' | b'-' => {
+                let mut index = 24;
+                let offset_minutes = parse_offset_minutes(bytes, &mut index)? as i32;
+                let offset_minutes = if offset_sign == b'-' {
+                    -offset_minutes
+                } else {
+                    offset_minutes
+                };
+                return Ok((seconds, millis, offset_minutes));
+            }
+            digit @ b'0'..=b'9' => {
+                let mut i = 24 - 1;
+                let offset_minutes = skip_nanos_and_parse_offset_minutes_slow_path(bytes, &mut i)?;
+                return Ok((seconds, millis, offset_minutes));
+            }
+            _ => return Err(ParseError::InvalidChar(23)),
+        }
+    }
+
+    let mut index = 16;
+    let (second, nano, offset_minutes) =
+        parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
+    Ok((second, nano / 1_000_000, offset_minutes))
 }
 
 #[inline(always)]
@@ -475,11 +514,11 @@ fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
         unsafe {
             let min = _mm_sub_epi8(
                 _mm_set_epi64x(0, i64::from_le_bytes(*b":00.000+")),
-                _mm_set1_epi64x(0x01010101_01010101),
+                _mm_set1_epi64x(0x0101_0101_0101_0101),
             );
             let max = _mm_add_epi8(
                 _mm_set_epi64x(0, i64::from_le_bytes(*b":99.999Z")),
-                _mm_set1_epi64x(0x01010101_01010101),
+                _mm_set1_epi64x(0x0101_0101_0101_0101),
             );
             let reg = _mm_set1_epi64x(buf as _);
 
@@ -578,8 +617,44 @@ pub mod simd_tests {
     #[test]
     fn test_parse_simd() {
         assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 100),
+            parse_simd(b"2345-12-24T17:30:15.1Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 120),
+            parse_simd(b"2345-12-24T17:30:15.12Z").unwrap()
+        );
+        assert_eq!(
             Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.123Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.1234Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.12345Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.123456Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.123457Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.12345678Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            parse_simd(b"2345-12-24T17:30:15.123456789Z").unwrap()
+        );
+        assert_eq!(
+            Timestamp::new_with_offset_minute(2345, 12, 24, 17, 30, 15, 123, -60),
+            parse_simd(b"2345-12-24T17:30:15.123456789-01:00").unwrap()
         );
     }
 
@@ -637,6 +712,44 @@ pub mod simd_tests {
         );
 
         let input = b"2020-09-08T13:42:29.123456Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+
+        let input = b"2020-09-08T13:42:29.123456+01:00";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+
+        let input = b"2020-09-08T13:42:29.1234567Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+        let input = b"2020-09-08T13:42:29.1234567-01:00";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+
+        let input = b"2020-09-08T13:42:29.12345678Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+        let input = b"2020-09-08T13:42:29.123456789Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+        let input = b"2020-09-08T13:42:29.123456789Z";
+        assert_eq!(
+            try_parse_seconds_and_millis_simd(input),
+            Some((29, 123, b'4'))
+        );
+        let input = b"2020-09-08T13:42:29.123456789-02:00";
         assert_eq!(
             try_parse_seconds_and_millis_simd(input),
             Some((29, 123, b'4'))
