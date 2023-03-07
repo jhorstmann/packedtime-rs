@@ -134,6 +134,21 @@ fn bench_timestamp_chrono(input: &[i64], output: &mut [u8]) {
         })
 }
 
+#[inline(never)]
+fn bench_timestamp_time(input: &[i64], output: &mut [u8]) {
+    output
+        .chunks_mut(24)
+        .zip(input.iter())
+        .for_each(|(out, inp)| {
+            // TODO: format including fractional seconds
+            let odt = time::OffsetDateTime::from_unix_timestamp(*inp / 1000).unwrap();
+            let formatted = odt
+                .format(&time::format_description::well_known::Rfc3339)
+                .unwrap();
+            out[..formatted.len()].copy_from_slice(formatted.as_bytes());
+        })
+}
+
 pub fn bench_format(c: &mut Criterion) {
     const BATCH_SIZE: usize = 1024;
 
@@ -164,6 +179,9 @@ pub fn bench_format(c: &mut Criterion) {
         });
         group.bench_function("format_chrono", |b| {
             b.iter(|| bench_timestamp_chrono(&inputs, &mut output));
+        });
+        group.bench_function("format_time", |b| {
+            b.iter(|| bench_timestamp_time(&inputs, &mut output));
         });
     }
 
