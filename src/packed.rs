@@ -113,7 +113,7 @@ impl PackedTimestamp {
         let minute = minute_of_day % 60;
         let hour_of_day = minute_of_day / 60;
 
-        let (year, month, day) = EpochDays::new(epoch_days as i32).to_ymd();
+        let (year, month, day) = EpochDays::new(epoch_days).to_ymd();
 
         Self::new_utc(
             year,

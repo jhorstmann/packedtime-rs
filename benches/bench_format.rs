@@ -1,5 +1,5 @@
 use chrono::{DateTime, Datelike, NaiveDateTime, SecondsFormat, Timelike, Utc};
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
 use packedtime_rs::PackedTimestamp;
 use std::io::{Cursor, Write};
 
@@ -101,6 +101,24 @@ fn bench_timestamp_simd(input: &[i64], output: &mut [u8]) {
         })
 }
 
+fn ts_to_string_packed(ts: i64) -> String {
+    let pts = PackedTimestamp::from_timestamp_millis(ts);
+    pts.to_rfc3339_string()
+}
+
+fn ts_to_string_chrono(ts: i64) -> String {
+    let ndt = NaiveDateTime::from_timestamp(ts / 1000, (ts % 1000) as _);
+    let dt = DateTime::<Utc>::from_utc(ndt, Utc);
+    dt.to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+fn ts_to_string_time(ts: i64) -> String {
+    // does not include fractional seconds
+    let odt = time::OffsetDateTime::from_unix_timestamp(ts / 1000).unwrap();
+    odt.format(&time::format_description::well_known::Rfc3339)
+        .unwrap()
+}
+
 #[inline(never)]
 fn bench_timestamp_scalar(input: &[i64], output: &mut [u8]) {
     output
@@ -126,10 +144,8 @@ fn bench_timestamp_chrono(input: &[i64], output: &mut [u8]) {
     output
         .chunks_mut(24)
         .zip(input.iter())
-        .for_each(|(out, inp)| {
-            let ts = NaiveDateTime::from_timestamp(*inp / 1000, (*inp % 1000) as _);
-            let formatted =
-                DateTime::<Utc>::from_utc(ts, Utc).to_rfc3339_opts(SecondsFormat::Millis, true);
+        .for_each(|(out, ts)| {
+            let formatted = ts_to_string_chrono(*ts);
             out.copy_from_slice(formatted.as_bytes());
         })
 }
@@ -182,6 +198,34 @@ pub fn bench_format(c: &mut Criterion) {
         });
         group.bench_function("format_time", |b| {
             b.iter(|| bench_timestamp_time(&inputs, &mut output));
+        });
+    }
+
+    {
+        let mut group = c.benchmark_group("format_to_string");
+        let group = group.throughput(Throughput::Bytes(
+            (BATCH_SIZE * (std::mem::size_of::<i64>() + 24)) as u64,
+        ));
+        group.bench_function("packed", |b| {
+            b.iter(|| {
+                inputs.iter().for_each(|ts| {
+                    black_box(ts_to_string_packed(*ts));
+                })
+            });
+        });
+        group.bench_function("chrono", |b| {
+            b.iter(|| {
+                inputs.iter().for_each(|ts| {
+                    black_box(ts_to_string_chrono(*ts));
+                })
+            });
+        });
+        group.bench_function("time", |b| {
+            b.iter(|| {
+                inputs.iter().for_each(|ts| {
+                    black_box(ts_to_string_time(*ts));
+                })
+            });
         });
     }
 

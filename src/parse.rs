@@ -112,7 +112,7 @@ fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
     let m = ts.minute as i64;
     let s = ts.second as i64;
     let offset_minute = ts.offset_minute as i64;
-    let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s as i64 - offset_minute * 60;
+    let seconds = epoch_day * 24 * 60 * 60 + h * 60 * 60 + m * 60 + s - offset_minute * 60;
 
     seconds * 1000 + ts.millisecond as i64
 }
@@ -133,7 +133,7 @@ pub fn parse_to_packed_timestamp_scalar(input: &str) -> ParseResult<PackedTimest
         ts.hour as u32,
         ts.minute as u32,
         ts.second as u32,
-        ts.millisecond as u32,
+        ts.millisecond,
         ts.offset_minute,
     ))
 }
