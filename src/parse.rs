@@ -1,5 +1,6 @@
 use crate::error::*;
 use crate::{EpochDays, PackedTimestamp};
+use crate::datetime::DateTimeComponents;
 
 #[repr(C)]
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -33,78 +34,9 @@ impl SimdTimestamp {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Default)]
-pub(crate) struct Timestamp {
-    year: u16,
-    month: u8,
-    day: u8,
-    hour: u8,
-    minute: u8,
-    second: u8,
-    millisecond: u32,
-    offset_minute: i32,
-}
-
-impl Timestamp {
-    pub(crate) fn new(
-        year: u16,
-        month: u8,
-        day: u8,
-        hour: u8,
-        minute: u8,
-        second: u8,
-        millisecond: u32,
-    ) -> Self {
-        Self {
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            second,
-            millisecond,
-            offset_minute: 0,
-        }
-    }
-
-    pub(crate) fn new_with_offset_minute(
-        year: u16,
-        month: u8,
-        day: u8,
-        hour: u8,
-        minute: u8,
-        second: u8,
-        millisecond: u32,
-        offset_minute: i32,
-    ) -> Self {
-        Self {
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            second,
-            millisecond,
-            offset_minute,
-        }
-    }
-
-    pub(crate) fn to_packed(&self) -> PackedTimestamp {
-        PackedTimestamp::new(
-            self.year as _,
-            self.month as _,
-            self.day as _,
-            self.hour as _,
-            self.minute as _,
-            self.second as _,
-            self.millisecond as _,
-            self.offset_minute,
-        )
-    }
-}
 
 #[inline(always)]
-fn ts_to_epoch_millis(ts: &Timestamp) -> i64 {
+fn ts_to_epoch_millis(ts: &DateTimeComponents) -> i64 {
     let epoch_day =
         EpochDays::from_ymd(ts.year as i32, ts.month as i32, ts.day as i32).days() as i64;
 
@@ -138,12 +70,12 @@ pub fn parse_to_packed_timestamp_scalar(input: &str) -> ParseResult<PackedTimest
     ))
 }
 
-pub(crate) fn parse_scalar(bytes: &[u8]) -> ParseResult<Timestamp> {
+pub(crate) fn parse_scalar(bytes: &[u8]) -> ParseResult<DateTimeComponents> {
     if bytes.len() < 16 {
         return Err(ParseError::InvalidLen(bytes.len()));
     }
 
-    let mut timestamp = Timestamp::default();
+    let mut timestamp = DateTimeComponents::default();
     let mut index = 0;
 
     let year = parse_num4(bytes, &mut index)?;
@@ -444,7 +376,7 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
     target_feature = "sse2",
     target_feature = "ssse3"
 ))]
-pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
+pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<DateTimeComponents> {
     if bytes.len() < 16 {
         return Err(ParseError::InvalidLen(bytes.len()));
     }
@@ -453,7 +385,7 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<Timestamp> {
 
     let (seconds, millis, offset_minutes) = parse_seconds_and_millis_simd(bytes)?;
 
-    Ok(Timestamp {
+    Ok(DateTimeComponents {
         year: timestamp.year_hi * 100 + timestamp.year_lo,
         month: timestamp.month as u8,
         day: timestamp.day as u8,
@@ -565,7 +497,7 @@ pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
 ))]
 pub mod simd_tests {
     use crate::error::ParseError;
-    use crate::parse::{parse_simd, try_parse_seconds_and_millis_simd, Timestamp};
+    use crate::parse::{parse_simd, try_parse_seconds_and_millis_simd, DateTimeComponents};
     use crate::parse_to_epoch_millis_simd;
 
     #[test]
@@ -617,43 +549,43 @@ pub mod simd_tests {
     #[test]
     fn test_parse_simd() {
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 100),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 100),
             parse_simd(b"2345-12-24T17:30:15.1Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 120),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 120),
             parse_simd(b"2345-12-24T17:30:15.12Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.123Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.1234Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.12345Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.123456Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.123457Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.12345678Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_simd(b"2345-12-24T17:30:15.123456789Z").unwrap()
         );
         assert_eq!(
-            Timestamp::new_with_offset_minute(2345, 12, 24, 17, 30, 15, 123, -60),
+            DateTimeComponents::new_with_offset_minute(2345, 12, 24, 17, 30, 15, 123, -60),
             parse_simd(b"2345-12-24T17:30:15.123456789-01:00").unwrap()
         );
     }
@@ -661,7 +593,7 @@ pub mod simd_tests {
     #[test]
     fn test_parse_with_offset_simd() {
         assert_eq!(
-            Timestamp::new_with_offset_minute(2020, 9, 19, 11, 40, 20, 123, 2 * 60),
+            DateTimeComponents::new_with_offset_minute(2020, 9, 19, 11, 40, 20, 123, 2 * 60),
             parse_simd(b"2020-09-19T11:40:20.123+02:00").unwrap()
         );
     }
@@ -759,12 +691,13 @@ pub mod simd_tests {
 
 #[cfg(test)]
 mod scalar_tests {
-    use crate::{parse_scalar, parse_to_epoch_millis_scalar, Timestamp};
+    use crate::{parse_scalar, parse_to_epoch_millis_scalar};
+    use crate::datetime::DateTimeComponents;
 
     #[test]
     fn test_parse_scalar() {
         assert_eq!(
-            Timestamp::new(2345, 12, 24, 17, 30, 15, 123),
+            DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_scalar(b"2345-12-24T17:30:15.123Z").unwrap()
         );
     }

@@ -11,6 +11,7 @@ mod kernels;
 mod packed;
 mod parse;
 mod util;
+mod datetime;
 
 pub use epoch_days::*;
 pub use error::*;
