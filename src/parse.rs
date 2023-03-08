@@ -1,6 +1,6 @@
+use crate::datetime::DateTimeComponents;
 use crate::error::*;
 use crate::{EpochDays, PackedTimestamp};
-use crate::datetime::DateTimeComponents;
 
 #[repr(C)]
 #[derive(PartialEq, Clone, Debug, Default)]
@@ -34,11 +34,9 @@ impl SimdTimestamp {
     }
 }
 
-
 #[inline(always)]
 fn ts_to_epoch_millis(ts: &DateTimeComponents) -> i64 {
-    let epoch_day =
-        EpochDays::from_ymd(ts.year as i32, ts.month as i32, ts.day as i32).days() as i64;
+    let epoch_day = EpochDays::from_ymd(ts.year, ts.month as i32, ts.day as i32).days() as i64;
 
     let h = ts.hour as i64;
     let m = ts.minute as i64;
@@ -59,7 +57,7 @@ pub fn parse_to_epoch_millis_scalar(input: &str) -> ParseResult<i64> {
 pub fn parse_to_packed_timestamp_scalar(input: &str) -> ParseResult<PackedTimestamp> {
     let ts = parse_scalar(input.as_bytes())?;
     Ok(PackedTimestamp::new(
-        ts.year as i32,
+        ts.year,
         ts.month as u32,
         ts.day as u32,
         ts.hour as u32,
@@ -92,7 +90,7 @@ pub(crate) fn parse_scalar(bytes: &[u8]) -> ParseResult<DateTimeComponents> {
 
     let offset = parse_utc_or_offset_minutes(bytes, &mut index)?;
 
-    timestamp.year = year as u16;
+    timestamp.year = year as i32;
     timestamp.month = month as u8;
     timestamp.day = day as u8;
     timestamp.hour = hour as u8;
@@ -691,8 +689,8 @@ pub mod simd_tests {
 
 #[cfg(test)]
 mod scalar_tests {
-    use crate::{parse_scalar, parse_to_epoch_millis_scalar};
     use crate::datetime::DateTimeComponents;
+    use crate::{parse_scalar, parse_to_epoch_millis_scalar};
 
     #[test]
     fn test_parse_scalar() {
