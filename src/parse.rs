@@ -305,13 +305,13 @@ pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
 pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestamp> {
     let ts = parse_simd(input.as_bytes())?;
     Ok(PackedTimestamp::new(
-        ts.year as i32,
+        ts.year,
         ts.month as u32,
         ts.day as u32,
         ts.hour as u32,
         ts.minute as u32,
         ts.second as u32,
-        ts.millisecond as u32,
+        ts.millisecond,
         ts.offset_minute,
     ))
 }
@@ -384,7 +384,7 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<DateTimeComponents> {
     let (seconds, millis, offset_minutes) = parse_seconds_and_millis_simd(bytes)?;
 
     Ok(DateTimeComponents {
-        year: timestamp.year_hi * 100 + timestamp.year_lo,
+        year: timestamp.year_hi as i32 * 100 + timestamp.year_lo as i32,
         month: timestamp.month as u8,
         day: timestamp.day as u8,
         hour: timestamp.hour as u8,

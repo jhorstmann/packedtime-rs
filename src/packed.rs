@@ -2,11 +2,11 @@
 // MMMMdddddhhhhhmmmmmmssssss00
 // 3210765432107654321076543210
 
+use crate::datetime::DateTimeComponents;
 use crate::format::*;
 use crate::{EpochDays, ParseError, ParseResult};
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
-use crate::datetime::DateTimeComponents;
 
 const OFFSET_BITS: u32 = 12;
 const MILLI_BITS: u32 = 10;
@@ -225,34 +225,15 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn to_rfc3339_bytes(&self) -> [u8; 24] {
-        let mut buffer = [0_u8; 24];
-        #[cfg(target_feature = "sse4.1")]
-        unsafe {
-            format_simd_mul_to_slice(
-                &mut buffer,
-                self.year(),
-                self.month(),
-                self.day(),
-                self.hour(),
-                self.minute(),
-                self.second(),
-                self.millisecond(),
-            );
-        }
-        #[cfg(not(target_feature = "sse4.1"))]
-        {
-            format_scalar_to_slice(
-                &mut buffer,
-                self.year(),
-                self.month(),
-                self.day(),
-                self.hour(),
-                self.minute(),
-                self.second(),
-                self.millisecond(),
-            );
-        }
-        buffer
+        format_to_rfc3339_utc_bytes(
+            self.year(),
+            self.month(),
+            self.day(),
+            self.hour(),
+            self.minute(),
+            self.second(),
+            self.millisecond(),
+        )
     }
 
     #[inline]
