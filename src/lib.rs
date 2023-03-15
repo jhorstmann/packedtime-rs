@@ -4,6 +4,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::manual_range_contains)]
 
+mod datetime;
 mod epoch_days;
 mod error;
 mod format;
@@ -11,7 +12,6 @@ mod kernels;
 mod packed;
 mod parse;
 mod util;
-mod datetime;
 
 pub use epoch_days::*;
 pub use error::*;

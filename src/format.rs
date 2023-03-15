@@ -336,7 +336,15 @@ pub fn format_scalar_to_slice(
     //unsafe { asm!("#LLVM-MCA-END format_scalar") };
 }
 
-pub fn format_to_rfc3339_utc_bytes(year: u32, month: u32, day: u32, hour: u32, minute: u32, second: u32, millisecond: u32) -> [u8; 24] {
+pub fn format_to_rfc3339_utc_bytes(
+    year: u32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    second: u32,
+    millisecond: u32,
+) -> [u8; 24] {
     let mut buffer = [0_u8; 24];
     #[cfg(target_feature = "sse4.1")]
     unsafe {
@@ -366,7 +374,6 @@ pub fn format_to_rfc3339_utc_bytes(year: u32, month: u32, day: u32, hour: u32, m
     }
     buffer
 }
-
 
 #[cfg(test)]
 type FormatToSlice = unsafe fn(&mut [u8], u32, u32, u32, u32, u32, u32, u32);

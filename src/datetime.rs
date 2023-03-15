@@ -1,4 +1,4 @@
-use crate::{EpochDays, MILLIS_PER_DAY, PackedTimestamp};
+use crate::{EpochDays, PackedTimestamp, MILLIS_PER_DAY};
 
 /// Internal struct containing the components of a DateTime as separate fields.
 #[derive(PartialEq, Clone, Debug, Default)]
