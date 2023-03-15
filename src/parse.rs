@@ -685,6 +685,14 @@ pub mod simd_tests {
             Some((29, 123, b'4'))
         );
     }
+
+    #[test]
+    fn test_parse_leap_seconds_simd() {
+        assert_eq!(
+            DateTimeComponents::new(2023, 1, 3, 9, 30, 60, 123),
+            parse_simd(b"2023-01-03T09:30:60.123Z").unwrap()
+        );
+    }
 }
 
 #[cfg(test)]
@@ -697,6 +705,14 @@ mod scalar_tests {
         assert_eq!(
             DateTimeComponents::new(2345, 12, 24, 17, 30, 15, 123),
             parse_scalar(b"2345-12-24T17:30:15.123Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_leap_seconds_scalar() {
+        assert_eq!(
+            DateTimeComponents::new(2023, 1, 3, 9, 30, 60, 123),
+            parse_scalar(b"2023-01-03T09:30:60.123Z").unwrap()
         );
     }
 
