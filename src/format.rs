@@ -346,7 +346,7 @@ pub fn format_to_rfc3339_utc_bytes(
     millisecond: u32,
 ) -> [u8; 24] {
     let mut buffer = [0_u8; 24];
-    #[cfg(target_feature = "sse4.1")]
+    #[cfg(all(not(miri), target_feature = "sse4.1"))]
     unsafe {
         format_simd_mul_to_slice(
             &mut buffer,
@@ -359,7 +359,7 @@ pub fn format_to_rfc3339_utc_bytes(
             millisecond,
         );
     }
-    #[cfg(not(target_feature = "sse4.1"))]
+    #[cfg(not(all(not(miri), target_feature = "sse4.1")))]
     {
         format_scalar_to_slice(
             &mut buffer,
@@ -450,6 +450,7 @@ mod scalar_tests {
 
 #[cfg(test)]
 #[cfg(all(
+    not(miri),
     target_arch = "x86_64",
     target_feature = "sse2",
     target_feature = "ssse3",

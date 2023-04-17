@@ -137,12 +137,12 @@ impl PackedTimestamp {
     }
 
     pub fn from_rfc3339_bytes(input: &[u8]) -> ParseResult<Self> {
-        #[cfg(target_feature = "sse4.1")]
+        #[cfg(all(not(miri), target_feature = "sse4.1"))]
         {
             let ts = crate::parse::parse_simd(input)?;
             Ok(ts.to_packed())
         }
-        #[cfg(not(target_feature = "sse4.1"))]
+        #[cfg(not(all(not(miri), target_feature = "sse4.1")))]
         {
             let ts = crate::parse::parse_scalar(input)?;
             Ok(ts.to_packed())
@@ -203,7 +203,7 @@ impl PackedTimestamp {
     pub fn offset_minutes(&self) -> i32 {
         let bits = (self.value & ((1 << OFFSET_BITS) - 1)) as i32;
         // offset is the only field that can be negative and needs sign extension
-        bits << (32-OFFSET_BITS) >> (32-OFFSET_BITS)
+        bits << (32 - OFFSET_BITS) >> (32 - OFFSET_BITS)
     }
 
     #[inline]
