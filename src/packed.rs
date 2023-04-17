@@ -145,12 +145,12 @@ impl PackedTimestamp {
     }
 
     pub fn from_rfc3339_bytes(input: &[u8]) -> ParseResult<Self> {
-        #[cfg(target_feature = "sse4.1")]
+        #[cfg(all(not(miri), target_feature = "sse4.1"))]
         {
             let ts = crate::parse::parse_simd(input)?;
             Ok(ts.to_packed())
         }
-        #[cfg(not(target_feature = "sse4.1"))]
+        #[cfg(not(all(not(miri), target_feature = "sse4.1")))]
         {
             let ts = crate::parse::parse_scalar(input)?;
             Ok(ts.to_packed())
@@ -234,7 +234,7 @@ impl PackedTimestamp {
     #[inline]
     pub fn to_rfc3339_bytes(&self) -> [u8; 24] {
         let mut buffer = [0_u8; 24];
-        #[cfg(target_feature = "sse4.1")]
+        #[cfg(all(not(miri), target_feature = "sse4.1"))]
         unsafe {
             format_simd_mul_to_slice(
                 &mut buffer,
@@ -247,7 +247,7 @@ impl PackedTimestamp {
                 self.millisecond(),
             );
         }
-        #[cfg(not(target_feature = "sse4.1"))]
+        #[cfg(not(all(not(miri), target_feature = "sse4.1")))]
         {
             format_scalar_to_slice(
                 &mut buffer,

@@ -559,6 +559,7 @@ pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
 
 #[cfg(test)]
 #[cfg(all(
+    not(miri),
     target_arch = "x86_64",
     target_feature = "sse2",
     target_feature = "ssse3"

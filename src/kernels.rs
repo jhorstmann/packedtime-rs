@@ -230,8 +230,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
-    #[cfg_attr(not(feature = "expensive_tests"), ignore)]
+    #[cfg_attr(any(miri, not(feature = "expensive_tests")), ignore)]
     fn test_date_trunc_year_exhaustive() {
         let start = chrono::NaiveDate::from_ymd(1700, 1, 1)
             .and_hms(0, 0, 0)
@@ -261,8 +260,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(miri, ignore)]
-    #[cfg_attr(not(feature = "expensive_tests"), ignore)]
+    #[cfg_attr(any(miri, not(feature = "expensive_tests")), ignore)]
     fn test_date_trunc_month_exhaustive() {
         let start = chrono::NaiveDate::from_ymd(1700, 1, 1)
             .and_hms(0, 0, 0)
