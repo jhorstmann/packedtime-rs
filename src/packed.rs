@@ -89,7 +89,7 @@ impl PackedTimestamp {
             << MILLI_BITS
             | milli as u64)
             << OFFSET_BITS)
-            | offset_minutes as u64;
+            | (offset_minutes & ((1 << OFFSET_BITS) - 1)) as u64;
         Self { value }
     }
 
@@ -201,7 +201,9 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn offset_minutes(&self) -> i32 {
-        (self.value & ((1 << OFFSET_BITS) - 1)) as i32
+        let bits = (self.value & ((1 << OFFSET_BITS) - 1)) as i32;
+        // offset is the only field that can be negative and needs sign extension
+        bits << (32-OFFSET_BITS) >> (32-OFFSET_BITS)
     }
 
     #[inline]
@@ -356,6 +358,18 @@ pub mod tests {
     }
 
     #[test]
+    fn test_offset_minutes() {
+        assert_eq!(
+            120,
+            PackedTimestamp::new(2022, 8, 21, 17, 30, 15, 250, 120).offset_minutes()
+        );
+        assert_eq!(
+            -120,
+            PackedTimestamp::new(2022, 8, 21, 17, 30, 15, 250, -120).offset_minutes()
+        );
+    }
+
+    #[test]
     fn test_parse_error() {
         assert_eq!(
             PackedTimestamp::try_from("2022-08-21 FOO"),
@@ -413,6 +427,27 @@ pub mod tests {
         assert_eq!(
             PackedTimestamp::from_timestamp_millis(-24 * 60 * 60 * 1000),
             PackedTimestamp::new_utc(1969, 12, 31, 0, 0, 0, 0)
+        );
+    }
+
+    #[test]
+    fn test_to_timestamp_millis() {
+        assert_eq!(
+            PackedTimestamp::new_utc(1970, 1, 1, 0, 0, 0, 0).to_timestamp_millis(),
+            0
+        );
+        assert_eq!(
+            PackedTimestamp::new_utc(2023, 7, 3, 22, 55, 30, 123).to_timestamp_millis(),
+            1688424930123
+        );
+
+        assert_eq!(
+            PackedTimestamp::new(2023, 7, 3, 22, 55, 30, 123, 120).to_timestamp_millis(),
+            1688417730123
+        );
+        assert_eq!(
+            PackedTimestamp::new(2023, 7, 3, 22, 55, 30, 123, -120).to_timestamp_millis(),
+            1688432130123
         );
     }
 }
