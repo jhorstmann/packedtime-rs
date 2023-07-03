@@ -349,6 +349,10 @@ pub mod tests {
             "2022-08-21T17:30:15.250+02:00".parse(),
             Ok(PackedTimestamp::new(2022, 8, 21, 17, 30, 15, 250, 120))
         );
+        assert_eq!(
+            "2022-08-21T17:30:15.250-02:00".parse(),
+            Ok(PackedTimestamp::new(2022, 8, 21, 17, 30, 15, 250, -120))
+        );
     }
 
     #[test]

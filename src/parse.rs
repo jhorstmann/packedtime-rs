@@ -597,6 +597,22 @@ pub mod simd_tests {
     }
 
     #[test]
+    fn test_parse_with_zero_offset_simd() {
+        assert_eq!(
+            DateTimeComponents::new_with_offset_minute(2020, 9, 19, 11, 40, 20, 123, 0),
+            parse_simd(b"2020-09-19T11:40:20.123-00:00").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_parse_with_negative_offset_simd() {
+        assert_eq!(
+            DateTimeComponents::new_with_offset_minute(2020, 9, 19, 11, 40, 20, 123, -2 * 60),
+            parse_simd(b"2020-09-19T11:40:20.123-02:00").unwrap()
+        );
+    }
+
+    #[test]
     fn test_parse_millis_simd() {
         let input = "2020-09-18T23:30:15Z";
         let expected = chrono::DateTime::parse_from_rfc3339(input)
