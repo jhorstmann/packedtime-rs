@@ -183,6 +183,28 @@ impl EpochDays {
         Self::from_ymd(y, m, d)
     }
 
+    /// Adds the given number of `years` to `epoch_days`.
+    /// If the day would be out of range for the resulting month
+    /// then the date will be clamped to the end of the month.
+    ///
+    /// For example: 2020-02-29 + 1year => 2021-02-28
+    #[inline]
+    pub fn add_years(&self, years: i32) -> Self {
+        let (mut y, m, mut d) = self.to_ymd();
+        y += years;
+        d = d.min(days_per_month(y, m-1));
+        Self::from_ymd(y, m, d)
+    }
+
+    #[inline]
+    pub fn diff_months(&self, other: EpochDays) -> i32 {
+        let (y0, m0, d0) = self.to_ymd();
+        let (y1, m1, d1) = other.to_ymd();
+
+        // TODO: Special-case the end of month? IOW, should diff(2023-10-31, 2023-11-30) return 1?
+        (y1 * 12 + m1) - (y0 * 12 + m0) - (d1 < d0) as i32
+    }
+
     #[inline]
     pub fn date_trunc_month(&self) -> Self {
         let (y, m, d) = self.to_ymd();
@@ -267,6 +289,47 @@ mod tests {
     #[test]
     fn test_date_trunc_year_epoch_days() {
         assert_eq!(18993, EpochDays::new(19198).date_trunc_year().days());
+    }
+
+    #[test]
+    fn test_date_trunc_month_epoch_days() {
+        assert_eq!(19174, EpochDays::new(19198).date_trunc_month().days());
+    }
+
+    #[test]
+    fn test_date_diff_month_epoch_days() {
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 1).diff_months(EpochDays::from_ymd(2023, 11, 1)),
+            1
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 1).diff_months(EpochDays::from_ymd(2023, 12, 1)),
+            2
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 1).diff_months(EpochDays::from_ymd(2023, 12, 31)),
+            2
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 22).diff_months(EpochDays::from_ymd(2023, 11, 22)),
+            1
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 22).diff_months(EpochDays::from_ymd(2023, 11, 21)),
+            0
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 31).diff_months(EpochDays::from_ymd(2023, 11, 30)),
+            0
+        );
+    }
+
+    #[test]
+    fn test_date_diff_month_epoch_days_negative() {
+        assert_eq!(
+            EpochDays::from_ymd(2023, 11, 1).diff_months(EpochDays::from_ymd(2023, 10, 1)),
+            -1
+        );
     }
 
     #[test]

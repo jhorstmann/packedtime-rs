@@ -102,6 +102,38 @@ pub fn date_part_month_timestamp_millis(ts: i64) -> i32 {
     epoch_days.extract_month()
 }
 
+#[inline]
+fn timestamp_to_year_month_millis_of_month(ts: i64) -> (i32, i32, i64) {
+    let (days, millis) = (ts.div_euclid(MILLIS_PER_DAY), ts.rem_euclid(MILLIS_PER_DAY));
+    let (year, month, d0) = EpochDays::new(days as i32).to_ymd();
+    let millis_of_month = (d0 as i64)*MILLIS_PER_DAY + millis;
+    (year, month, millis_of_month)
+}
+
+#[inline]
+fn timestamp_to_year_month_millis_of_month_float(ts: f64) -> (i32, i32, f64) {
+    let days = (ts * (1.0 / MILLIS_PER_DAY as f64)).floor();
+    let epoch_days = EpochDays::new(unsafe { days.to_int_unchecked() });
+    let millis = ts - days * (MILLIS_PER_DAY as f64);
+    let (year, month, d0) = epoch_days.to_ymd();
+    let millis_of_month = (d0 as f64)*(MILLIS_PER_DAY as f64) + millis;
+    (year, month, millis_of_month)
+}
+
+#[inline]
+pub fn date_diff_month_timestamp_millis(t0: i64, t1: i64) -> i32 {
+    let (y0, m0, ms0) = timestamp_to_year_month_millis_of_month(t0);
+    let (y1, m1, ms1) = timestamp_to_year_month_millis_of_month(t1);
+    (y1*12 + m1) - (y0*12 + m0) - ((ms1 < ms0) as i32)
+}
+
+#[inline]
+pub fn date_diff_month_timestamp_millis_float(t0: f64, t1: f64) -> i32 {
+    let (y0, m0, ms0) = timestamp_to_year_month_millis_of_month_float(t0);
+    let (y1, m1, ms1) = timestamp_to_year_month_millis_of_month_float(t1);
+    (y1*12 + m1) - (y0*12 + m0) - ((ms1 < ms0) as i32)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::epoch_days::EpochDays;
@@ -209,6 +241,7 @@ mod tests {
         assert_eq!(epoch_day.add_months(-4), EpochDays::from_ymd(2022, 3, 31));
         assert_eq!(epoch_day.add_months(-5), EpochDays::from_ymd(2022, 2, 28));
         assert_eq!(epoch_day.add_months(-6), EpochDays::from_ymd(2022, 1, 31));
+        assert_eq!(epoch_day.add_months(-7), EpochDays::from_ymd(2021, 12, 31));
     }
 
     #[test]
@@ -227,6 +260,12 @@ mod tests {
             date_add_month_timestamp_millis(1661102969_000, 12),
             1692576000_000
         );
+    }
+
+    #[test]
+    fn test_date_diff_months() {
+        // assert_eq!(epoch_day.add_months(-1), EpochDays::from_ymd(2022, 6, 30));
+
     }
 
     #[test]
