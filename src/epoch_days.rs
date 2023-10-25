@@ -53,6 +53,15 @@ fn is_leap_year(year: i32) -> bool {
     ((year % 4) == 0) & ((year % 100) != 0) | ((year % 400) == 0)
 }
 
+#[inline]
+fn days_per_month(year: i32, zero_based_month: i32) -> i32 {
+    let is_leap = is_leap_year(year);
+    let is_feb = zero_based_month == 1;
+    let mut days = 30 + ((zero_based_month % 2) != (zero_based_month <= 6) as i32) as i32;
+    days -= (2 - is_leap as i32  ) * (is_feb as i32);
+    days
+}
+
 /// A date represented as the number of days since the unix epoch 1970-01-01.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct EpochDays(i32);
@@ -84,15 +93,8 @@ impl EpochDays {
 
         total += ((367 * m - 362) / 12);
         total += day - 1;
-        total -= if m > 2 {
-            if !is_leap_year(year) {
-                2
-            } else {
-                1
-            }
-        } else {
-            0
-        };
+
+        total -= 0_i32.wrapping_sub((m > 2) as i32) & (1 + (!is_leap_year(year) as i32));
 
         Self(total - DAYS_0000_TO_1970)
     }
@@ -114,13 +116,22 @@ impl EpochDays {
             zero_day += -adjust_cycles * DAYS_PER_CYCLE;
         }
         let mut year_est = (400 * zero_day + 591) / DAYS_PER_CYCLE;
+
+        if !SUPPORT_NEGATIVE_YEAR {
+            year_est &= i32::MAX;
+        }
+
         let mut doy_est =
             zero_day - (365 * year_est + year_est / 4 - year_est / 100 + year_est / 400);
-        if doy_est < 0 {
-            // fix estimate
-            year_est -= 1;
-            doy_est = zero_day - (365 * year_est + year_est / 4 - year_est / 100 + year_est / 400);
+
+        // fix estimate
+        year_est -= (doy_est < 0) as i32;
+        if !SUPPORT_NEGATIVE_YEAR {
+            year_est &= i32::MAX;
         }
+
+        doy_est = zero_day - (365 * year_est + year_est / 4 - year_est / 100 + year_est / 400);
+
         year_est += adjust; // reset any negative year
         let march_doy0 = doy_est;
 
@@ -135,7 +146,7 @@ impl EpochDays {
 
     #[inline]
     pub fn from_timestamp_millis(ts: i64) -> Self {
-        // todo: find a way to get this vectorizable using integer operations or verify it is exact for all timestamps
+        // Converting to f64 is not necessarily faster but allows autovectorization if used in a loop
         Self::from_timestamp_millis_float(ts as f64)
     }
 
@@ -156,7 +167,7 @@ impl EpochDays {
     }
 
     /// Adds the given number of `months` to `epoch_days`.
-    /// If the day would be out of range for the resulting month and the `CLAMP_DAYS` flag is set
+    /// If the day would be out of range for the resulting month
     /// then the date will be clamped to the end of the month.
     ///
     /// For example: 2022-01-31 + 1month => 2022-02-28
@@ -167,7 +178,7 @@ impl EpochDays {
         m0 += months;
         y += m0.div_euclid(12);
         m0 = m0.rem_euclid(12);
-        d = d.min(DAYS_PER_MONTH[is_leap_year(y) as usize][m0 as usize] as _);
+        d = d.min(days_per_month(y, m0));
         m = m0 + 1;
         Self::from_ymd(y, m, d)
     }
@@ -213,7 +224,7 @@ impl EpochDays {
 
 #[cfg(test)]
 mod tests {
-    use crate::epoch_days::is_leap_year;
+    use crate::epoch_days::{days_per_month, DAYS_PER_MONTH, is_leap_year};
     use crate::EpochDays;
 
     #[test]
@@ -229,6 +240,16 @@ mod tests {
 
         assert!(is_leap_year(2004));
         assert!(is_leap_year(2020));
+    }
+
+    #[test]
+    fn test_days_per_month() {
+        for i in 0..12 {
+            assert_eq!(days_per_month(2023, i as i32), DAYS_PER_MONTH[0][i], "non-leap: {i}");
+        }
+        for i in 0..12 {
+            assert_eq!(days_per_month(2020, i as i32), DAYS_PER_MONTH[1][i], "leap: {i}");
+        }
     }
 
     #[test]
