@@ -390,14 +390,10 @@ fn assert_format(
     millisecond: u32,
     f: FormatToSlice,
 ) {
-    let mut buffer: Vec<u8> = Vec::with_capacity(32);
-
-    unsafe { buffer.set_len(24) };
-
-    let slice = &mut buffer.as_mut_slice()[0..24];
+    let mut buffer = vec![0; 24];
 
     unsafe {
-        f(slice, year, month, day, hour, minute, second, millisecond);
+        f(buffer.as_mut_slice(), year, month, day, hour, minute, second, millisecond);
     }
 
     let actual = String::from_utf8(buffer).unwrap();
@@ -415,7 +411,7 @@ mod scalar_tests {
         assert_format(
             "2021-09-10T23:45:31.987Z",
             2021,
-            09,
+            9,
             10,
             23,
             45,
