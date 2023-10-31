@@ -2,7 +2,11 @@ use chrono::NaiveDateTime;
 use chronoutil::shift_months;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 
-use packedtime_rs::{date_add_month_timestamp_millis, date_add_month_timestamp_millis_float, date_diff_month_timestamp_millis, date_diff_month_timestamp_millis_float};
+use packedtime_rs::{
+    date_add_month_timestamp_millis, date_add_month_timestamp_millis_float,
+    date_diff_month_timestamp_millis, date_diff_month_timestamp_millis_float,
+    date_diff_year_timestamp_millis, date_diff_year_timestamp_millis_float,
+};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -52,7 +56,29 @@ fn bench_date_diff_month_float(start: &[f64], end: &[f64], output: &mut [i32]) {
         });
 }
 
+#[inline(never)]
+fn bench_date_diff_year(start: &[i64], end: &[i64], output: &mut [i32]) {
+    assert_eq!(start.len(), end.len());
+    assert_eq!(start.len(), output.len());
+    output
+        .iter_mut()
+        .zip(start.iter().copied().zip(end.iter().copied()))
+        .for_each(|(output, (start, end))| {
+            *output = date_diff_year_timestamp_millis(start, end);
+        });
+}
 
+#[inline(never)]
+fn bench_date_diff_year_float(start: &[f64], end: &[f64], output: &mut [i32]) {
+    assert_eq!(start.len(), end.len());
+    assert_eq!(start.len(), output.len());
+    output
+        .iter_mut()
+        .zip(start.iter().copied().zip(end.iter().copied()))
+        .for_each(|(output, (start, end))| {
+            *output = date_diff_year_timestamp_millis_float(start, end);
+        });
+}
 
 #[inline(never)]
 fn bench_date_add_month_chronoutil(input: &[i64], output: &mut [i64], months: i32) {
@@ -109,16 +135,27 @@ pub fn bench_date_add(c: &mut Criterion) {
 
     c.benchmark_group("date_diff_month")
         .throughput(Throughput::Bytes(
-            (BATCH_SIZE * 2 * std::mem::size_of::<i64>() + BATCH_SIZE*std::mem::size_of::<i32>()) as u64,
+            (BATCH_SIZE * 2 * std::mem::size_of::<i64>() + BATCH_SIZE * std::mem::size_of::<i32>())
+                as u64,
         ))
         .bench_function("date_diff_month", |b| {
             b.iter(|| bench_date_diff_month(&input, &input2, &mut output_diff))
         })
         .bench_function("date_diff_month_float", |b| {
             b.iter(|| bench_date_diff_month_float(&input_float, &input_float2, &mut output_diff))
-        })
-    ;
+        });
 
+    c.benchmark_group("date_diff_year")
+        .throughput(Throughput::Bytes(
+            (BATCH_SIZE * 2 * std::mem::size_of::<i64>() + BATCH_SIZE * std::mem::size_of::<i32>())
+                as u64,
+        ))
+        .bench_function("date_diff_year", |b| {
+            b.iter(|| bench_date_diff_year(&input, &input2, &mut output_diff))
+        })
+        .bench_function("date_diff_year_float", |b| {
+            b.iter(|| bench_date_diff_year_float(&input_float, &input_float2, &mut output_diff))
+        });
 }
 
 criterion_group!(benches, bench_date_add);

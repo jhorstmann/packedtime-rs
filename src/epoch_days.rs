@@ -206,6 +206,15 @@ impl EpochDays {
     }
 
     #[inline]
+    pub fn diff_years(&self, other: EpochDays) -> i32 {
+        let (y0, m0, d0) = self.to_ymd();
+        let (y1, m1, d1) = other.to_ymd();
+
+        // y1 - y0 - ((m1 < m0) | ((m1 == m0) & (d1 < d0))) as i32
+        y1 - y0 - ((m1, d1) < (m0, d0)) as i32
+    }
+
+    #[inline]
     pub fn date_trunc_month(&self) -> Self {
         let (y, m, d) = self.to_ymd();
         Self::from_ymd(y, m, 1)
@@ -329,6 +338,42 @@ mod tests {
         assert_eq!(
             EpochDays::from_ymd(2023, 11, 1).diff_months(EpochDays::from_ymd(2023, 10, 1)),
             -1
+        );
+    }
+
+    #[test]
+    fn test_date_diff_year_epoch_days() {
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 1).diff_years(EpochDays::from_ymd(2023, 10, 1)),
+            0
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 10, 1).diff_years(EpochDays::from_ymd(2023, 11, 1)),
+            0
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 1, 1).diff_years(EpochDays::from_ymd(2024, 1, 1)),
+            1
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 2, 28).diff_years(EpochDays::from_ymd(2024, 2, 28)),
+            1
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 2, 28).diff_years(EpochDays::from_ymd(2024, 2, 29)),
+            1
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 6, 15).diff_years(EpochDays::from_ymd(2024, 6, 14)),
+            0
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 6, 15).diff_years(EpochDays::from_ymd(2025, 6, 14)),
+            1
+        );
+        assert_eq!(
+            EpochDays::from_ymd(2023, 6, 15).diff_years(EpochDays::from_ymd(2025, 6, 16)),
+            2
         );
     }
 
