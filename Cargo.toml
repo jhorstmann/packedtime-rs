@@ -2,7 +2,7 @@
 name = "packedtime-rs"
 description = "Utilities for efficiently storing, parsing, formatting and truncating timestamps"
 authors = ["Jörn Horstmann <git@jhorstmann.net>"]
-version = "0.2.6"
+version = "0.3.0"
 edition = "2021"
 
 repository = "https://github.com/jhorstmann/packedtime-rs"
