@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.1](https://github.com/jhorstmann/packedtime-rs/tree/0.3.1) (2023-11-03)
+
+ - The `date_add_month` kernels should leave the time part unchanged
+
 ## [0.3.0](https://github.com/jhorstmann/packedtime-rs/tree/0.3.0) (2023-11-01)
 
  - Support calculating the difference between dates in units of years or months

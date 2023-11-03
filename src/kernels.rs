@@ -77,20 +77,6 @@ pub fn date_trunc_quarter_timestamp_millis_float(ts: f64) -> f64 {
 }
 
 #[inline]
-pub fn date_add_month_timestamp_millis(ts: i64, months: i32) -> i64 {
-    let epoch_days = EpochDays::from_timestamp_millis(ts);
-    let new_epoch_days = epoch_days.add_months(months);
-    new_epoch_days.to_timestamp_millis()
-}
-
-#[inline]
-pub fn date_add_month_timestamp_millis_float(ts: f64, months: i32) -> f64 {
-    let epoch_days = EpochDays::from_timestamp_millis_float(ts);
-    let new_epoch_days = epoch_days.add_months(months);
-    new_epoch_days.to_timestamp_millis_float()
-}
-
-#[inline]
 pub fn date_part_year_timestamp_millis(ts: i64) -> i32 {
     let epoch_days = EpochDays::from_timestamp_millis(ts);
     epoch_days.extract_year()
@@ -103,20 +89,45 @@ pub fn date_part_month_timestamp_millis(ts: i64) -> i32 {
 }
 
 #[inline]
-fn timestamp_to_year_month_millis_of_month(ts: i64) -> (i32, i32, i64) {
+fn timestamp_to_epoch_days_and_remainder(ts: i64) -> (EpochDays, i64) {
     let (days, millis) = (ts.div_euclid(MILLIS_PER_DAY), ts.rem_euclid(MILLIS_PER_DAY));
-    let (year, month, d0) = EpochDays::new(days as i32).to_ymd();
-    let millis_of_month = (d0 as i64)*MILLIS_PER_DAY + millis;
+    (EpochDays::new(days as i32), millis)
+}
+
+#[inline]
+fn timestamp_to_epoch_days_and_remainder_float(ts: f64) -> (EpochDays, f64) {
+    let days = (ts * (1.0 / MILLIS_PER_DAY as f64)).floor();
+    let millis = ts - days * (MILLIS_PER_DAY as f64);
+    (EpochDays::new(unsafe { days.to_int_unchecked() }), millis)
+}
+
+#[inline]
+pub fn date_add_month_timestamp_millis(ts: i64, months: i32) -> i64 {
+    let (epoch_days, millis) = timestamp_to_epoch_days_and_remainder(ts);
+    let new_epoch_days = epoch_days.add_months(months);
+    new_epoch_days.to_timestamp_millis() + millis
+}
+
+#[inline]
+pub fn date_add_month_timestamp_millis_float(ts: f64, months: i32) -> f64 {
+    let (epoch_days, millis) = timestamp_to_epoch_days_and_remainder_float(ts);
+    let new_epoch_days = epoch_days.add_months(months);
+    new_epoch_days.to_timestamp_millis_float() + millis
+}
+
+#[inline]
+fn timestamp_to_year_month_millis_of_month(ts: i64) -> (i32, i32, i64) {
+    let (ed, millis) = timestamp_to_epoch_days_and_remainder(ts);
+    let (year, month, day) = ed.to_ymd();
+    let millis_of_month = (day as i64)*MILLIS_PER_DAY + millis;
     (year, month, millis_of_month)
 }
 
 #[inline]
 fn timestamp_to_year_month_millis_of_month_float(ts: f64) -> (i32, i32, f64) {
-    let days = (ts * (1.0 / MILLIS_PER_DAY as f64)).floor();
-    let epoch_days = EpochDays::new(unsafe { days.to_int_unchecked() });
-    let millis = ts - days * (MILLIS_PER_DAY as f64);
-    let (year, month, d0) = epoch_days.to_ymd();
-    let millis_of_month = (d0 as f64)*(MILLIS_PER_DAY as f64) + millis;
+    let (ed, millis) = timestamp_to_epoch_days_and_remainder_float(ts);
+    let (year, month, day) = ed.to_ymd();
+    let millis_of_month = (day as f64)*(MILLIS_PER_DAY as f64) + millis;
     (year, month, millis_of_month)
 }
 
@@ -265,11 +276,11 @@ mod tests {
     fn test_date_add_months_timestamp_millis() {
         assert_eq!(
             date_add_month_timestamp_millis(1661102969_000, 1),
-            1663718400_000
+            1663781369000
         );
         assert_eq!(
             date_add_month_timestamp_millis(1661102969_000, 12),
-            1692576000_000
+            1692638969000
         );
     }
 
