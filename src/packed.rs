@@ -15,8 +15,7 @@ const MINUTE_BITS: u32 = 6;
 const HOUR_BITS: u32 = 5;
 const DAY_BITS: u32 = 5;
 const MONTH_BITS: u32 = 4;
-const YEAR_BITS: u32 =
-    64 - (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS);
+const YEAR_BITS: u32 = 64 - (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS);
 
 const MIN_YEAR_INTERNAL: i32 = -(1 << (YEAR_BITS - 1));
 const MAX_YEAR_INTERNAL: i32 = (1 << (YEAR_BITS - 1)) - 1;
@@ -34,10 +33,7 @@ const MAX_OFFSET_MINUTES: i32 = MAX_OFFSET_HOURS * 60;
 #[allow(clippy::assertions_on_constants)]
 const _: () = {
     assert!(MIN_YEAR_INTERNAL < MIN_YEAR || MAX_YEAR_INTERNAL > MAX_YEAR);
-    assert!(
-        MIN_OFFSET_MINUTES_INTERNAL < MIN_OFFSET_MINUTES
-            || MAX_OFFSET_MINUTES_INTERNAL > MAX_OFFSET_MINUTES
-    );
+    assert!(MIN_OFFSET_MINUTES_INTERNAL < MIN_OFFSET_MINUTES || MAX_OFFSET_MINUTES_INTERNAL > MAX_OFFSET_MINUTES);
 };
 
 #[derive(PartialEq, Clone, Copy, Ord, PartialOrd, Eq)]
@@ -49,15 +45,7 @@ pub struct PackedTimestamp {
 impl PackedTimestamp {
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    pub fn new_utc(
-        year: i32,
-        month: u32,
-        day: u32,
-        hour: u32,
-        minute: u32,
-        second: u32,
-        milli: u32,
-    ) -> Self {
+    pub fn new_utc(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, milli: u32) -> Self {
         Self::new(year, month, day, hour, minute, second, milli, 0)
     }
 
@@ -68,20 +56,8 @@ impl PackedTimestamp {
 
     #[inline]
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        year: i32,
-        month: u32,
-        day: u32,
-        hour: u32,
-        minute: u32,
-        second: u32,
-        milli: u32,
-        offset_minutes: i32,
-    ) -> Self {
-        let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS
-            | day as u64)
-            << HOUR_BITS
-            | hour as u64)
+    pub fn new(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, milli: u32, offset_minutes: i32) -> Self {
+        let value = ((((((((year as u64) << MONTH_BITS | month as u64) << DAY_BITS | day as u64) << HOUR_BITS | hour as u64)
             << MINUTE_BITS
             | minute as u64)
             << SECOND_BITS
@@ -120,9 +96,7 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn to_timestamp_millis(&self) -> i64 {
-        let date_part =
-            EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32)
-                .to_timestamp_millis();
+        let date_part = EpochDays::from_ymd(self.year() as i32, self.month() as i32, self.day() as i32).to_timestamp_millis();
 
         let h = self.hour() as i64;
         let m = self.minute() as i64;
@@ -155,33 +129,23 @@ impl PackedTimestamp {
 
     #[inline]
     pub fn year(&self) -> u32 {
-        (self.value
-            >> (MONTH_BITS
-                + DAY_BITS
-                + HOUR_BITS
-                + MINUTE_BITS
-                + SECOND_BITS
-                + MILLI_BITS
-                + OFFSET_BITS)) as u32
+        (self.value >> (MONTH_BITS + DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) as u32
     }
 
     #[inline]
     pub fn month(&self) -> u32 {
-        ((self.value
-            >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS))
-            & ((1 << MONTH_BITS) - 1)) as u32
+        ((self.value >> (DAY_BITS + HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << MONTH_BITS) - 1))
+            as u32
     }
 
     #[inline]
     pub fn day(&self) -> u32 {
-        ((self.value >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS))
-            & ((1 << DAY_BITS) - 1)) as u32
+        ((self.value >> (HOUR_BITS + MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << DAY_BITS) - 1)) as u32
     }
 
     #[inline]
     pub fn hour(&self) -> u32 {
-        ((self.value >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS))
-            & ((1 << HOUR_BITS) - 1)) as u32
+        ((self.value >> (MINUTE_BITS + SECOND_BITS + MILLI_BITS + OFFSET_BITS)) & ((1 << HOUR_BITS) - 1)) as u32
     }
 
     #[inline]
@@ -247,9 +211,7 @@ impl PackedTimestamp {
         }
         #[cfg(debug_assertions)]
         {
-            std::str::from_utf8(&buffer)
-                .expect("utf8 string")
-                .to_string()
+            std::str::from_utf8(&buffer).expect("utf8 string").to_string()
         }
     }
 }

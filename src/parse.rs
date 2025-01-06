@@ -125,20 +125,14 @@ fn parse_seconds_and_nanos(bytes: &[u8], index: &mut usize) -> ParseResult<(u32,
 }
 
 #[inline(never)]
-fn parse_seconds_and_nanos_and_offset_minutes_slow_path(
-    bytes: &[u8],
-    index: &mut usize,
-) -> ParseResult<(u32, u32, i32)> {
+fn parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes: &[u8], index: &mut usize) -> ParseResult<(u32, u32, i32)> {
     let (seconds, nanos) = parse_seconds_and_nanos(bytes, index)?;
     let offset_minutes = parse_utc_or_offset_minutes(bytes, index)?;
     Ok((seconds, nanos, offset_minutes))
 }
 
 #[inline(never)]
-fn skip_nanos_and_parse_offset_minutes_slow_path(
-    bytes: &[u8],
-    index: &mut usize,
-) -> ParseResult<i32> {
+fn skip_nanos_and_parse_offset_minutes_slow_path(bytes: &[u8], index: &mut usize) -> ParseResult<i32> {
     skip_fractional_millis(bytes, index);
     let offset_minutes = parse_utc_or_offset_minutes(bytes, index)?;
     Ok(offset_minutes)
@@ -193,17 +187,7 @@ fn parse_num4(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
     Ok(d1 * 1000 + d2 * 100 + d3 * 10 + d4)
 }
 
-const NANO_MULTIPLIER: [u32; 9] = [
-    1,
-    10,
-    100,
-    1_000,
-    10_000,
-    100_000,
-    1_000_000,
-    10_000_000,
-    100_000_000,
-];
+const NANO_MULTIPLIER: [u32; 9] = [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000, 100_000_000];
 
 #[inline(always)]
 fn parse_nano(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
@@ -284,11 +268,7 @@ fn digit(bytes: &[u8], i: &mut usize) -> ParseResult<u32> {
 // only public for benchmarks
 #[doc(hidden)]
 #[inline]
-#[cfg(all(
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
     let ts = parse_simd(input.as_bytes())?;
     Ok(ts_to_epoch_millis(&ts))
@@ -297,11 +277,7 @@ pub fn parse_to_epoch_millis_simd(input: &str) -> ParseResult<i64> {
 // only public for benchmarks
 #[doc(hidden)]
 #[inline]
-#[cfg(all(
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestamp> {
     let ts = parse_simd(input.as_bytes())?;
     Ok(PackedTimestamp::new(
@@ -318,11 +294,7 @@ pub fn parse_to_packed_timestamp_simd(input: &str) -> ParseResult<PackedTimestam
 
 #[inline]
 #[cfg(target_arch = "x86_64")]
-#[cfg(all(
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimestamp> {
     use std::arch::x86_64::*;
 
@@ -350,10 +322,7 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
     }
 
     let nums = _mm_sub_epi8(ts_without_seconds, space);
-    let nums = _mm_shuffle_epi8(
-        nums,
-        _mm_set_epi8(-1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0),
-    );
+    let nums = _mm_shuffle_epi8(nums, _mm_set_epi8(-1, -1, -1, -1, 15, 14, 12, 11, 9, 8, 6, 5, 3, 2, 1, 0));
 
     let hundreds = _mm_and_si128(nums, _mm_set1_epi16(0x00FF));
     let hundreds = _mm_mullo_epi16(hundreds, _mm_set1_epi16(10));
@@ -369,11 +338,7 @@ unsafe fn parse_simd_yyyy_mm_dd_hh_mm(bytes: *const u8) -> ParseResult<SimdTimes
 }
 
 #[inline]
-#[cfg(all(
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<DateTimeComponents> {
     if bytes.len() < 16 {
         return Err(ParseError::InvalidLen(bytes.len()));
@@ -396,11 +361,7 @@ pub(crate) fn parse_simd(bytes: &[u8]) -> ParseResult<DateTimeComponents> {
 }
 
 #[inline(always)]
-#[cfg(all(
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 fn parse_seconds_and_millis_simd(bytes: &[u8]) -> ParseResult<(u32, u32, i32)> {
     if let Some((seconds, millis, offset_sign)) = try_parse_seconds_and_millis_simd(bytes) {
         match offset_sign {
@@ -425,17 +386,12 @@ fn parse_seconds_and_millis_simd(bytes: &[u8]) -> ParseResult<(u32, u32, i32)> {
     }
 
     let mut index = 16;
-    let (second, nano, offset_minutes) =
-        parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
+    let (second, nano, offset_minutes) = parse_seconds_and_nanos_and_offset_minutes_slow_path(bytes, &mut index)?;
     Ok((second, nano / 1_000_000, offset_minutes))
 }
 
 #[inline(always)]
-#[cfg(all(
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
     use std::arch::x86_64::*;
     if input.len() >= 24 {
@@ -465,8 +421,7 @@ fn try_parse_seconds_and_millis_simd(input: &[u8]) -> Option<(u32, u32, u8)> {
         let buf = buf.to_le_bytes();
 
         let second = (buf[1] - b'0') as u32 * 10 + (buf[2] - b'0') as u32;
-        let milli =
-            (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
+        let milli = (buf[4] - b'0') as u32 * 100 + (buf[5] - b'0') as u32 * 10 + (buf[6] - b'0') as u32;
 
         Some((second, milli, buf[7]))
     } else {
@@ -488,12 +443,7 @@ pub fn parse_to_timestamp_millis(bytes: &[u8]) -> ParseResult<i64> {
 }
 
 #[cfg(test)]
-#[cfg(all(
-    not(miri),
-    target_arch = "x86_64",
-    target_feature = "sse2",
-    target_feature = "ssse3"
-))]
+#[cfg(all(not(miri), target_arch = "x86_64", target_feature = "sse2", target_feature = "ssse3"))]
 pub mod simd_tests {
     use crate::error::ParseError;
     use crate::parse::{parse_simd, try_parse_seconds_and_millis_simd, DateTimeComponents};
@@ -519,30 +469,12 @@ pub mod simd_tests {
 
     #[test]
     fn test_invalid_char() {
-        assert_eq!(
-            Err(ParseError::InvalidChar(0)),
-            parse_simd(b"X020-09-10T12:00:00Z")
-        );
-        assert_eq!(
-            Err(ParseError::InvalidChar(1)),
-            parse_simd(b"2X20-09-10T12:00:00Z")
-        );
-        assert_eq!(
-            Err(ParseError::InvalidChar(2)),
-            parse_simd(b"20X0-09-10T12:00:00Z")
-        );
-        assert_eq!(
-            Err(ParseError::InvalidChar(10)),
-            parse_simd(b"2020-09-10X12:00:00Z")
-        );
-        assert_eq!(
-            Err(ParseError::InvalidChar(10)),
-            parse_simd(b"2020-09-10X12:00/")
-        );
-        assert_eq!(
-            Err(ParseError::InvalidChar(15)),
-            parse_simd(b"2020-09-10T12:0X/")
-        );
+        assert_eq!(Err(ParseError::InvalidChar(0)), parse_simd(b"X020-09-10T12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(1)), parse_simd(b"2X20-09-10T12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(2)), parse_simd(b"20X0-09-10T12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(10)), parse_simd(b"2020-09-10X12:00:00Z"));
+        assert_eq!(Err(ParseError::InvalidChar(10)), parse_simd(b"2020-09-10X12:00/"));
+        assert_eq!(Err(ParseError::InvalidChar(15)), parse_simd(b"2020-09-10T12:0X/"));
     }
 
     #[test]
@@ -616,9 +548,7 @@ pub mod simd_tests {
     #[test]
     fn test_parse_millis_simd() {
         let input = "2020-09-18T23:30:15Z";
-        let expected = chrono::DateTime::parse_from_rfc3339(input)
-            .unwrap()
-            .timestamp_millis();
+        let expected = chrono::DateTime::parse_from_rfc3339(input).unwrap().timestamp_millis();
         let actual = parse_to_epoch_millis_simd(input).unwrap();
         assert_eq!(expected, actual);
     }
@@ -627,9 +557,7 @@ pub mod simd_tests {
     fn test_parse_millis_simd_masked() {
         let input = "2020-09-18T23:30:15Z--::ZZ";
         let input = unsafe { input.get_unchecked(0..20) };
-        let expected = chrono::DateTime::parse_from_rfc3339(input)
-            .unwrap()
-            .timestamp_millis();
+        let expected = chrono::DateTime::parse_from_rfc3339(input).unwrap().timestamp_millis();
         let actual = parse_to_epoch_millis_simd(input).unwrap();
         assert_eq!(expected, actual);
     }
@@ -641,66 +569,33 @@ pub mod simd_tests {
         assert!(try_parse_seconds_and_millis_simd(input).is_none());
 
         let input = b"2020-09-08T13:42:29.123Z";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'Z'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'Z')));
 
         let input = b"2020-09-08T13:42:29.123+01:00";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'+'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'+')));
 
         let input = b"2020-09-08T13:42:29.123-01:00";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'-'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'-')));
 
         let input = b"2020-09-08T13:42:29.123456Z";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
 
         let input = b"2020-09-08T13:42:29.123456+01:00";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
 
         let input = b"2020-09-08T13:42:29.1234567Z";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
         let input = b"2020-09-08T13:42:29.1234567-01:00";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
 
         let input = b"2020-09-08T13:42:29.12345678Z";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
         let input = b"2020-09-08T13:42:29.123456789Z";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
         let input = b"2020-09-08T13:42:29.123456789Z";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
         let input = b"2020-09-08T13:42:29.123456789-02:00";
-        assert_eq!(
-            try_parse_seconds_and_millis_simd(input),
-            Some((29, 123, b'4'))
-        );
+        assert_eq!(try_parse_seconds_and_millis_simd(input), Some((29, 123, b'4')));
     }
 
     #[test]
@@ -736,9 +631,7 @@ mod scalar_tests {
     #[test]
     fn test_parse_millis_scalar() {
         let input = "2020-09-18T23:30:15Z";
-        let expected = chrono::DateTime::parse_from_rfc3339(input)
-            .unwrap()
-            .timestamp_millis();
+        let expected = chrono::DateTime::parse_from_rfc3339(input).unwrap().timestamp_millis();
         let actual = parse_to_epoch_millis_scalar(input).unwrap();
         assert_eq!(expected, actual);
     }

@@ -35,16 +35,7 @@ pub unsafe fn format_simd_mul_to_slice(
     let second = second as i16;
     let millisecond = millisecond as i16;
 
-    let input = _mm_setr_epi16(
-        millisecond / 10,
-        second,
-        minute,
-        hour,
-        day,
-        month,
-        year % 100,
-        year / 100,
-    );
+    let input = _mm_setr_epi16(millisecond / 10, second, minute, hour, day, month, year % 100, year / 100);
 
     // divide by 10 by reciprocal multiplication
     let tens = _mm_mulhi_epu16(input, _mm_set1_epi16(52429_u16 as i16));
@@ -58,14 +49,8 @@ pub unsafe fn format_simd_mul_to_slice(
     let fmt = _mm_or_si128(_mm_slli_epi16(tens, 8), ones);
 
     // broadcast to allow room for separators and lanewise shuffle
-    let fmt_lo = _mm_shuffle_epi8(
-        fmt,
-        _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, 2, 3, -1),
-    );
-    let fmt_hi = _mm_shuffle_epi8(
-        fmt,
-        _mm_set_epi8(4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15),
-    );
+    let fmt_lo = _mm_shuffle_epi8(fmt, _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, -1, 2, 3, -1));
+    let fmt_hi = _mm_shuffle_epi8(fmt, _mm_set_epi8(4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, 14, 15));
 
     // insert hundreds of milliseconds now that we have room
     // this is the only instruction in this method that requires sse4.1
@@ -172,24 +157,11 @@ unsafe fn simd_double_dabble_256(numbers: &[u16; 16]) -> __m256i {
 #[inline]
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "sse2,ssse3")]
-unsafe fn format_mmddhhmmss_double_dabble(
-    buffer: *mut u8,
-    month: u16,
-    day: u16,
-    hour: u16,
-    minute: u16,
-    second: u16,
-) {
+unsafe fn format_mmddhhmmss_double_dabble(buffer: *mut u8, month: u16, day: u16, hour: u16, minute: u16, second: u16) {
     let mut res = simd_double_dabble(&[0, 0, 0, second, minute, hour, day, month]);
 
-    res = _mm_shuffle_epi8(
-        res,
-        _mm_set_epi8(-1, 9, 8, -1, 7, 6, -1, 5, 4, -1, 3, 2, -1, 1, 0, -1),
-    );
-    res = _mm_add_epi8(
-        res,
-        _mm_loadu_si128(PATTERN_AFTER_YEAR.as_ptr() as *const __m128i),
-    );
+    res = _mm_shuffle_epi8(res, _mm_set_epi8(-1, 9, 8, -1, 7, 6, -1, 5, 4, -1, 3, 2, -1, 1, 0, -1));
+    res = _mm_add_epi8(res, _mm_loadu_si128(PATTERN_AFTER_YEAR.as_ptr() as *const __m128i));
 
     _mm_storeu_si128(buffer as *mut __m128i, res);
 }
@@ -210,14 +182,8 @@ unsafe fn format_yyyymmddhhmm_double_dabble(
 ) {
     let mut res = simd_double_dabble(&[year_hi, year_lo, month, day, hour, minute, 0, 0]);
 
-    res = _mm_shuffle_epi8(
-        res,
-        _mm_setr_epi8(0, 1, 2, 3, -1, 4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11),
-    );
-    res = _mm_add_epi8(
-        res,
-        _mm_loadu_si128(PATTERN_COMPLETE.as_ptr() as *const __m128i),
-    );
+    res = _mm_shuffle_epi8(res, _mm_setr_epi8(0, 1, 2, 3, -1, 4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11));
+    res = _mm_add_epi8(res, _mm_loadu_si128(PATTERN_COMPLETE.as_ptr() as *const __m128i));
 
     _mm_storeu_si128(buffer as *mut __m128i, res);
 }
@@ -230,14 +196,8 @@ unsafe fn format_yyyymmddhhmm_double_dabble(
 unsafe fn format_ss_sss_double_dabble(buffer: *mut u8, second: u16, milli_hi: u16, milli_lo: u16) {
     let mut res = simd_double_dabble(&[milli_hi, milli_lo, second, 0, 0, 0, 0, 0]);
 
-    res = _mm_shuffle_epi8(
-        res,
-        _mm_setr_epi8(-1, 4, 5, -1, 1, 2, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1),
-    );
-    res = _mm_add_epi8(
-        res,
-        _mm_loadu_si128(PATTERN_COMPLETE.as_ptr().add(16) as *const __m128i),
-    );
+    res = _mm_shuffle_epi8(res, _mm_setr_epi8(-1, 4, 5, -1, 1, 2, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1));
+    res = _mm_add_epi8(res, _mm_loadu_si128(PATTERN_COMPLETE.as_ptr().add(16) as *const __m128i));
 
     // (buffer as *mut i64).write(_mm_extract_epi64(res, 0));
     _mm_storel_epi64(buffer as *mut __m128i, res);
@@ -348,29 +308,11 @@ pub fn format_to_rfc3339_utc_bytes(
     let mut buffer = [0_u8; 24];
     #[cfg(all(not(miri), target_feature = "sse4.1"))]
     unsafe {
-        format_simd_mul_to_slice(
-            &mut buffer,
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            second,
-            millisecond,
-        );
+        format_simd_mul_to_slice(&mut buffer, year, month, day, hour, minute, second, millisecond);
     }
     #[cfg(not(all(not(miri), target_feature = "sse4.1")))]
     {
-        format_scalar_to_slice(
-            &mut buffer,
-            year,
-            month,
-            day,
-            hour,
-            minute,
-            second,
-            millisecond,
-        );
+        format_scalar_to_slice(&mut buffer, year, month, day, hour, minute, second, millisecond);
     }
     buffer
 }
@@ -419,17 +361,7 @@ mod scalar_tests {
             987,
             format_scalar_to_slice,
         );
-        assert_format(
-            "2021-01-01T00:00:00.000Z",
-            2021,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            format_scalar_to_slice,
-        );
+        assert_format("2021-01-01T00:00:00.000Z", 2021, 1, 1, 0, 0, 0, 0, format_scalar_to_slice);
         assert_format(
             "2021-12-31T23:59:60.999Z",
             2021,
@@ -469,17 +401,7 @@ mod simd_tests {
             987,
             format_simd_dd_to_slice,
         );
-        assert_format(
-            "2021-01-01T00:00:00.000Z",
-            2021,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            format_simd_dd_to_slice,
-        );
+        assert_format("2021-01-01T00:00:00.000Z", 2021, 1, 1, 0, 0, 0, 0, format_simd_dd_to_slice);
         assert_format(
             "2021-12-31T23:59:60.999Z",
             2021,
@@ -506,17 +428,7 @@ mod simd_tests {
             987,
             format_simd_mul_to_slice,
         );
-        assert_format(
-            "2021-01-01T00:00:00.000Z",
-            2021,
-            1,
-            1,
-            0,
-            0,
-            0,
-            0,
-            format_simd_mul_to_slice,
-        );
+        assert_format("2021-01-01T00:00:00.000Z", 2021, 1, 1, 0, 0, 0, 0, format_simd_mul_to_slice);
         assert_format(
             "2021-12-31T23:59:60.999Z",
             2021,

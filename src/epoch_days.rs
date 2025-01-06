@@ -1,8 +1,9 @@
 use crate::MILLIS_PER_DAY;
 
-/// Conversions from/to number of days since the unix epoch.
-/// Ported from <https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java>
-/// Original code has the following license:
+// Conversions from/to number of days since the unix epoch.
+// Ported from <https://github.com/ThreeTen/threetenbp/blob/master/src/main/java/org/threeten/bp/LocalDate.java>
+// Original code has the following license:
+
 /*
  * Copyright (c) 2007-present, Stephen Colebourne & Michael Nascimento Santos
  *
@@ -58,7 +59,7 @@ fn days_per_month(year: i32, zero_based_month: i32) -> i32 {
     let is_leap = is_leap_year(year);
     let is_feb = zero_based_month == 1;
     let mut days = 30 + ((zero_based_month % 2) != (zero_based_month <= 6) as i32) as i32;
-    days -= (2 - is_leap as i32  ) * (is_feb as i32);
+    days -= (2 - is_leap as i32) * (is_feb as i32);
     days
 }
 
@@ -121,8 +122,7 @@ impl EpochDays {
             year_est &= i32::MAX;
         }
 
-        let mut doy_est =
-            zero_day - (365 * year_est + year_est / 4 - year_est / 100 + year_est / 400);
+        let mut doy_est = zero_day - (365 * year_est + year_est / 4 - year_est / 100 + year_est / 400);
 
         // fix estimate
         year_est -= (doy_est < 0) as i32;
@@ -192,7 +192,7 @@ impl EpochDays {
     pub fn add_years(&self, years: i32) -> Self {
         let (mut y, m, mut d) = self.to_ymd();
         y += years;
-        d = d.min(days_per_month(y, m-1));
+        d = d.min(days_per_month(y, m - 1));
         Self::from_ymd(y, m, d)
     }
 
@@ -254,14 +254,14 @@ impl EpochDays {
 
     #[inline]
     pub fn days_in_month(&self) -> i32 {
-        let (y,m, _) = self.to_ymd();
+        let (y, m, _) = self.to_ymd();
         days_per_month(y, m)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::epoch_days::{days_per_month, DAYS_PER_MONTH, is_leap_year};
+    use crate::epoch_days::{days_per_month, is_leap_year, DAYS_PER_MONTH};
     use crate::EpochDays;
 
     #[test]

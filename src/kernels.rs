@@ -119,7 +119,7 @@ pub fn date_add_month_timestamp_millis_float(ts: f64, months: i32) -> f64 {
 fn timestamp_to_year_month_millis_of_month(ts: i64) -> (i32, i32, i64) {
     let (ed, millis) = timestamp_to_epoch_days_and_remainder(ts);
     let (year, month, day) = ed.to_ymd();
-    let millis_of_month = (day as i64)*MILLIS_PER_DAY + millis;
+    let millis_of_month = (day as i64) * MILLIS_PER_DAY + millis;
     (year, month, millis_of_month)
 }
 
@@ -127,7 +127,7 @@ fn timestamp_to_year_month_millis_of_month(ts: i64) -> (i32, i32, i64) {
 fn timestamp_to_year_month_millis_of_month_float(ts: f64) -> (i32, i32, f64) {
     let (ed, millis) = timestamp_to_epoch_days_and_remainder_float(ts);
     let (year, month, day) = ed.to_ymd();
-    let millis_of_month = (day as f64)*(MILLIS_PER_DAY as f64) + millis;
+    let millis_of_month = (day as f64) * (MILLIS_PER_DAY as f64) + millis;
     (year, month, millis_of_month)
 }
 
@@ -135,14 +135,14 @@ fn timestamp_to_year_month_millis_of_month_float(ts: f64) -> (i32, i32, f64) {
 pub fn date_diff_month_timestamp_millis(t0: i64, t1: i64) -> i32 {
     let (y0, m0, ms0) = timestamp_to_year_month_millis_of_month(t0);
     let (y1, m1, ms1) = timestamp_to_year_month_millis_of_month(t1);
-    (y1*12 + m1) - (y0*12 + m0) - ((ms1 < ms0) as i32)
+    (y1 * 12 + m1) - (y0 * 12 + m0) - ((ms1 < ms0) as i32)
 }
 
 #[inline]
 pub fn date_diff_month_timestamp_millis_float(t0: f64, t1: f64) -> i32 {
     let (y0, m0, ms0) = timestamp_to_year_month_millis_of_month_float(t0);
     let (y1, m1, ms1) = timestamp_to_year_month_millis_of_month_float(t1);
-    (y1*12 + m1) - (y0*12 + m0) - ((ms1 < ms0) as i32)
+    (y1 * 12 + m1) - (y0 * 12 + m0) - ((ms1 < ms0) as i32)
 }
 
 #[inline]
@@ -174,7 +174,10 @@ pub fn days_in_month_timestamp_millis_float(ts: f64) -> i32 {
 #[cfg(test)]
 mod tests {
     use crate::epoch_days::EpochDays;
-    use crate::{date_add_month_timestamp_millis, date_diff_month_timestamp_millis, date_diff_year_timestamp_millis, date_trunc_month_timestamp_millis, date_trunc_quarter_timestamp_millis, date_trunc_year_timestamp_millis};
+    use crate::{
+        date_add_month_timestamp_millis, date_diff_month_timestamp_millis, date_diff_year_timestamp_millis,
+        date_trunc_month_timestamp_millis, date_trunc_quarter_timestamp_millis, date_trunc_year_timestamp_millis,
+    };
     use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime};
     use std::ops::Add;
 
@@ -184,56 +187,32 @@ mod tests {
 
     fn date_trunc_year_chrono(ts: i64) -> i64 {
         let ndt = timestamp_to_naive_date_time(ts);
-        let truncated = NaiveDateTime::new(
-            NaiveDate::from_ymd(ndt.year(), 1, 1),
-            NaiveTime::from_hms(0, 0, 0),
-        );
+        let truncated = NaiveDateTime::new(NaiveDate::from_ymd(ndt.year(), 1, 1), NaiveTime::from_hms(0, 0, 0));
         truncated.timestamp_millis()
     }
 
     fn date_trunc_month_chrono(ts: i64) -> i64 {
         let ndt = timestamp_to_naive_date_time(ts);
-        let truncated = NaiveDateTime::new(
-            NaiveDate::from_ymd(ndt.year(), ndt.month(), 1),
-            NaiveTime::from_hms(0, 0, 0),
-        );
+        let truncated = NaiveDateTime::new(NaiveDate::from_ymd(ndt.year(), ndt.month(), 1), NaiveTime::from_hms(0, 0, 0));
         truncated.timestamp_millis()
     }
 
     #[test]
     fn test_date_trunc_year_millis() {
-        assert_eq!(
-            1640995200_000,
-            date_trunc_year_timestamp_millis(1640995200_000)
-        );
-        assert_eq!(
-            1640995200_000,
-            date_trunc_year_timestamp_millis(1658765238_000)
-        );
+        assert_eq!(1640995200_000, date_trunc_year_timestamp_millis(1640995200_000));
+        assert_eq!(1640995200_000, date_trunc_year_timestamp_millis(1658765238_000));
     }
 
     #[test]
     fn test_date_trunc_quarter_millis() {
-        assert_eq!(
-            1640995200_000,
-            date_trunc_quarter_timestamp_millis(1640995200_000)
-        );
-        assert_eq!(
-            1656633600_000,
-            date_trunc_quarter_timestamp_millis(1658766592_000)
-        );
+        assert_eq!(1640995200_000, date_trunc_quarter_timestamp_millis(1640995200_000));
+        assert_eq!(1656633600_000, date_trunc_quarter_timestamp_millis(1658766592_000));
     }
 
     #[test]
     fn test_date_trunc_month_millis() {
-        assert_eq!(
-            1640995200_000,
-            date_trunc_month_timestamp_millis(1640995200_000)
-        );
-        assert_eq!(
-            1656633600_000,
-            date_trunc_month_timestamp_millis(1658765238_000)
-        );
+        assert_eq!(1640995200_000, date_trunc_month_timestamp_millis(1640995200_000));
+        assert_eq!(1656633600_000, date_trunc_month_timestamp_millis(1658765238_000));
     }
 
     #[test]
@@ -286,93 +265,135 @@ mod tests {
 
     #[test]
     fn test_date_add_months_timestamp_millis() {
-        assert_eq!(
-            date_add_month_timestamp_millis(1661102969_000, 1),
-            1663781369000
-        );
-        assert_eq!(
-            date_add_month_timestamp_millis(1661102969_000, 12),
-            1692638969000
-        );
+        assert_eq!(date_add_month_timestamp_millis(1661102969_000, 1), 1663781369000);
+        assert_eq!(date_add_month_timestamp_millis(1661102969_000, 12), 1692638969000);
     }
 
     #[test]
     fn test_date_diff_months() {
-        assert_eq!(date_diff_month_timestamp_millis(EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(), EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis()), 0);
-        assert_eq!(date_diff_month_timestamp_millis(EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(), EpochDays::from_ymd(2023, 11, 1).to_timestamp_millis()), 1);
-        assert_eq!(date_diff_month_timestamp_millis(EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(), EpochDays::from_ymd(2023, 11, 14).to_timestamp_millis()), 0);
-        assert_eq!(date_diff_month_timestamp_millis(EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(), EpochDays::from_ymd(2023, 11, 15).to_timestamp_millis()), 1);
-        assert_eq!(date_diff_month_timestamp_millis(EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(), EpochDays::from_ymd(2023, 11, 16).to_timestamp_millis()), 1);
+        assert_eq!(
+            date_diff_month_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis()
+            ),
+            0
+        );
+        assert_eq!(
+            date_diff_month_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 11, 1).to_timestamp_millis()
+            ),
+            1
+        );
+        assert_eq!(
+            date_diff_month_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 11, 14).to_timestamp_millis()
+            ),
+            0
+        );
+        assert_eq!(
+            date_diff_month_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 11, 15).to_timestamp_millis()
+            ),
+            1
+        );
+        assert_eq!(
+            date_diff_month_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 11, 16).to_timestamp_millis()
+            ),
+            1
+        );
     }
 
     #[test]
     fn test_date_diff_years() {
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(), EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis()), 0);
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(), EpochDays::from_ymd(2023, 11, 1).to_timestamp_millis()), 0);
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(), EpochDays::from_ymd(2024, 10, 14).to_timestamp_millis()), 0);
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(), EpochDays::from_ymd(2024, 10, 15).to_timestamp_millis()), 1);
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(), EpochDays::from_ymd(2024, 10, 16).to_timestamp_millis()), 1);
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2024, 2, 29).to_timestamp_millis(), EpochDays::from_ymd(2025, 2, 28).to_timestamp_millis()), 0);
-        assert_eq!(date_diff_year_timestamp_millis(EpochDays::from_ymd(2024, 2, 29).to_timestamp_millis(), EpochDays::from_ymd(2025, 3, 1).to_timestamp_millis()), 1);
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis()
+            ),
+            0
+        );
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 1).to_timestamp_millis(),
+                EpochDays::from_ymd(2023, 11, 1).to_timestamp_millis()
+            ),
+            0
+        );
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(),
+                EpochDays::from_ymd(2024, 10, 14).to_timestamp_millis()
+            ),
+            0
+        );
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(),
+                EpochDays::from_ymd(2024, 10, 15).to_timestamp_millis()
+            ),
+            1
+        );
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2023, 10, 15).to_timestamp_millis(),
+                EpochDays::from_ymd(2024, 10, 16).to_timestamp_millis()
+            ),
+            1
+        );
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2024, 2, 29).to_timestamp_millis(),
+                EpochDays::from_ymd(2025, 2, 28).to_timestamp_millis()
+            ),
+            0
+        );
+        assert_eq!(
+            date_diff_year_timestamp_millis(
+                EpochDays::from_ymd(2024, 2, 29).to_timestamp_millis(),
+                EpochDays::from_ymd(2025, 3, 1).to_timestamp_millis()
+            ),
+            1
+        );
     }
 
     #[test]
     #[cfg_attr(any(miri, not(feature = "expensive_tests")), ignore)]
     fn test_date_trunc_year_exhaustive() {
-        let start = chrono::NaiveDate::from_ymd(1700, 1, 1)
-            .and_hms(0, 0, 0)
-            .timestamp_millis();
-        let end = chrono::NaiveDate::from_ymd(2500, 1, 1)
-            .and_hms(0, 0, 0)
-            .timestamp_millis();
+        let start = chrono::NaiveDate::from_ymd(1700, 1, 1).and_hms(0, 0, 0).timestamp_millis();
+        let end = chrono::NaiveDate::from_ymd(2500, 1, 1).and_hms(0, 0, 0).timestamp_millis();
 
         for ts in (start..end).step_by(60_000) {
             let trunc_chrono = date_trunc_year_chrono(ts);
             let trunc_packed = date_trunc_year_timestamp_millis(ts);
-            assert_eq!(
-                trunc_chrono, trunc_packed,
-                "{} != {} for {}",
-                trunc_chrono, trunc_packed, ts
-            );
+            assert_eq!(trunc_chrono, trunc_packed, "{} != {} for {}", trunc_chrono, trunc_packed, ts);
 
             let ts = ts + 59_999;
             let trunc_chrono = date_trunc_year_chrono(ts);
             let trunc_packed = date_trunc_year_timestamp_millis(ts);
-            assert_eq!(
-                trunc_chrono, trunc_packed,
-                "{} != {} for {}",
-                trunc_chrono, trunc_packed, ts
-            );
+            assert_eq!(trunc_chrono, trunc_packed, "{} != {} for {}", trunc_chrono, trunc_packed, ts);
         }
     }
 
     #[test]
     #[cfg_attr(any(miri, not(feature = "expensive_tests")), ignore)]
     fn test_date_trunc_month_exhaustive() {
-        let start = chrono::NaiveDate::from_ymd(1700, 1, 1)
-            .and_hms(0, 0, 0)
-            .timestamp_millis();
-        let end = chrono::NaiveDate::from_ymd(2500, 1, 1)
-            .and_hms(0, 0, 0)
-            .timestamp_millis();
+        let start = chrono::NaiveDate::from_ymd(1700, 1, 1).and_hms(0, 0, 0).timestamp_millis();
+        let end = chrono::NaiveDate::from_ymd(2500, 1, 1).and_hms(0, 0, 0).timestamp_millis();
 
         for ts in (start..end).step_by(60_000) {
             let trunc_chrono = date_trunc_month_chrono(ts);
             let trunc_packed = date_trunc_month_timestamp_millis(ts);
-            assert_eq!(
-                trunc_packed, trunc_chrono,
-                "{} != {} for {}",
-                trunc_packed, trunc_chrono, ts
-            );
+            assert_eq!(trunc_packed, trunc_chrono, "{} != {} for {}", trunc_packed, trunc_chrono, ts);
 
             let ts = ts + 59_999;
             let trunc_chrono = date_trunc_month_chrono(ts);
             let trunc_packed = date_trunc_month_timestamp_millis(ts);
-            assert_eq!(
-                trunc_chrono, trunc_packed,
-                "{} != {} for {}",
-                trunc_chrono, trunc_packed, ts
-            );
+            assert_eq!(trunc_chrono, trunc_packed, "{} != {} for {}", trunc_chrono, trunc_packed, ts);
         }
     }
 }
