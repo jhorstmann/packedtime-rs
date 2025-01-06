@@ -4,7 +4,9 @@ use packedtime_rs::{
     date_part_month_timestamp_millis, date_part_year_timestamp_millis,
     date_trunc_month_timestamp_millis, date_trunc_month_timestamp_millis_float,
     date_trunc_year_timestamp_millis, date_trunc_year_timestamp_millis_float,
+    days_in_month_timestamp_millis,
 };
+use std::hint::unreachable_unchecked;
 
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -75,8 +77,7 @@ fn bench_date_trunc_year_chrono(input: &[i64], output: &mut [i64]) {
         .iter_mut()
         .zip(input.iter().copied())
         .for_each(|(output, input)| {
-            let ndt =
-                NaiveDateTime::from_timestamp(input / 1000, (input % 1000 * 1_000_000) as u32);
+            let ndt = NaiveDateTime::from_timestamp(input / 1000, 0);
             let truncated = NaiveDateTime::new(
                 NaiveDate::from_ymd(ndt.year(), 1, 1),
                 NaiveTime::from_hms(0, 0, 0),
@@ -91,8 +92,7 @@ fn bench_date_trunc_month_chrono(input: &[i64], output: &mut [i64]) {
         .iter_mut()
         .zip(input.iter().copied())
         .for_each(|(output, input)| {
-            let ndt =
-                NaiveDateTime::from_timestamp(input / 1000, (input % 1000 * 1_000_000) as u32);
+            let ndt = NaiveDateTime::from_timestamp(input / 1000, 0);
             let truncated = NaiveDateTime::new(
                 NaiveDate::from_ymd(ndt.year(), ndt.month(), 1),
                 NaiveTime::from_hms(0, 0, 0),
@@ -107,8 +107,7 @@ fn bench_date_part_year_chrono(input: &[i64], output: &mut [i32]) {
         .iter_mut()
         .zip(input.iter().copied())
         .for_each(|(output, input)| {
-            let ndt =
-                NaiveDateTime::from_timestamp(input / 1000, (input % 1000 * 1_000_000) as u32);
+            let ndt = NaiveDateTime::from_timestamp(input / 1000, 0);
             *output = ndt.year();
         });
 }
@@ -119,9 +118,44 @@ fn bench_date_part_month_chrono(input: &[i64], output: &mut [i32]) {
         .iter_mut()
         .zip(input.iter().copied())
         .for_each(|(output, input)| {
-            let ndt =
-                NaiveDateTime::from_timestamp(input / 1000, (input % 1000 * 1_000_000) as u32);
+            let ndt = NaiveDateTime::from_timestamp(input / 1000, 0);
             *output = ndt.month() as i32;
+        });
+}
+
+#[inline(never)]
+fn bench_days_in_month(input: &[i64], output: &mut [i32]) {
+    output
+        .iter_mut()
+        .zip(input.iter().copied())
+        .for_each(|(output, input)| {
+            *output = days_in_month_timestamp_millis(input);
+        });
+}
+
+#[inline(never)]
+fn bench_days_in_month_chrono(input: &[i64], output: &mut [i32]) {
+    #[inline]
+    fn is_leap_year(year: i32) -> bool {
+        return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    }
+    output
+        .iter_mut()
+        .zip(input.iter().copied())
+        .for_each(|(output, input)| {
+            let ndt = NaiveDateTime::from_timestamp(input / 1000, 0);
+            *output = match ndt.month() {
+                1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+                4 | 6 | 9 | 11 => 30,
+                2 => {
+                    if is_leap_year(ndt.year()) {
+                        29
+                    } else {
+                        28
+                    }
+                }
+                _ => unsafe { unreachable_unchecked() },
+            }
         });
 }
 
@@ -178,6 +212,17 @@ pub fn bench_date_trunc(c: &mut Criterion) {
         })
         .bench_function("date_part_month_chrono", |b| {
             b.iter(|| bench_date_part_month_chrono(&input, &mut output_int))
+        });
+
+    c.benchmark_group("days_in_month")
+        .throughput(Throughput::Bytes(
+            (BATCH_SIZE * (std::mem::size_of::<i64>() + std::mem::size_of::<i32>())) as u64,
+        ))
+        .bench_function("days_in_month", |b| {
+            b.iter(|| bench_days_in_month(&input, &mut output_int))
+        })
+        .bench_function("days_in_month_chrono", |b| {
+            b.iter(|| bench_days_in_month_chrono(&input, &mut output_int))
         });
 }
 

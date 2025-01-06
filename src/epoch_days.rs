@@ -251,6 +251,12 @@ impl EpochDays {
     pub fn extract_day_of_month(&self) -> i32 {
         self.to_ymd().2
     }
+
+    #[inline]
+    pub fn days_in_month(&self) -> i32 {
+        let (y,m, _) = self.to_ymd();
+        days_per_month(y, m)
+    }
 }
 
 #[cfg(test)]
@@ -279,7 +285,13 @@ mod tests {
             assert_eq!(days_per_month(2023, i as i32), DAYS_PER_MONTH[0][i], "non-leap: {i}");
         }
         for i in 0..12 {
+            assert_eq!(days_per_month(1900, i as i32), DAYS_PER_MONTH[0][i], "non-leap (%100): {i}");
+        }
+        for i in 0..12 {
             assert_eq!(days_per_month(2020, i as i32), DAYS_PER_MONTH[1][i], "leap: {i}");
+        }
+        for i in 0..12 {
+            assert_eq!(days_per_month(2000, i as i32), DAYS_PER_MONTH[1][i], "leap (%400): {i}");
         }
     }
 

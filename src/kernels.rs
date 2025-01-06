@@ -159,6 +159,12 @@ pub fn date_diff_year_timestamp_millis_float(t0: f64, t1: f64) -> i32 {
     y1 - y0 - (((m1, ms1) < (m0, ms0)) as i32)
 }
 
+#[inline]
+pub fn days_in_month_timestamp_millis(ts: i64) -> i32 {
+    let epoch_days = EpochDays::from_timestamp_millis(ts);
+    epoch_days.days_in_month()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::epoch_days::EpochDays;
