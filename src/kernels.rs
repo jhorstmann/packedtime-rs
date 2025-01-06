@@ -165,6 +165,12 @@ pub fn days_in_month_timestamp_millis(ts: i64) -> i32 {
     epoch_days.days_in_month()
 }
 
+#[inline]
+pub fn days_in_month_timestamp_millis_float(ts: f64) -> i32 {
+    let epoch_days = EpochDays::from_timestamp_millis_float(ts);
+    epoch_days.days_in_month()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::epoch_days::EpochDays;
