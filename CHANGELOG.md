@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.2](https://github.com/jhorstmann/packedtime-rs/tree/0.3.1) (2025-01-06)
+
+ - Add `days_in_month` kernel
+
 ## [0.3.1](https://github.com/jhorstmann/packedtime-rs/tree/0.3.1) (2023-11-03)
 
  - The `date_add_month` kernels should leave the time part unchanged
